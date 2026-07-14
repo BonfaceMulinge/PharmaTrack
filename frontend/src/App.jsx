@@ -79,7 +79,7 @@ function App() {
 
   const refreshDashboardMetrics = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/reports/analytics`)
+      const response = await fetch(`${API_URL}/reports/analytics`)
       if (!response.ok) throw new Error('Failed to refresh metrics')
       const analytics = await response.json()
 
@@ -100,7 +100,7 @@ function App() {
 
   const refreshNotifications = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/notifications`)
+      const response = await fetch(`${API_URL}/notifications`)
       if (!response.ok) throw new Error('Failed to refresh notifications')
       const data = await response.json()
       setNotifications(data.filter((notification) => notification.type === 'LOW_STOCK').slice(0, 5))

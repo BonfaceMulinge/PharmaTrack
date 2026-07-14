@@ -29,7 +29,7 @@ function PurchaseManagement() {
 
   const fetchPurchases = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/purchases`);
+      const response = await fetch(`${API_URL}/purchases`);
       if (!response.ok) throw new Error('Failed');
       const data = await response.json();
       setPurchases(data);
@@ -41,7 +41,7 @@ function PurchaseManagement() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const response = await fetch(`${API_URL}/api/purchases`, {
+      const response = await fetch(`${API_URL}/purchases`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),

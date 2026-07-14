@@ -14,7 +14,7 @@ function ReportingAnalytics() {
   useEffect(() => {
     const load = async () => {
       try {
-        const response = await fetch(`${API_URL}/api/reports/analytics`);
+        const response = await fetch(`${API_URL}/reports/analytics`);
         if (!response.ok) throw new Error('Failed');
         const data = await response.json();
         setAnalytics(data);

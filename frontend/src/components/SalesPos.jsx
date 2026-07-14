@@ -26,7 +26,7 @@ function SalesPos({ onSaleComplete, onBackToDashboard }) {
   const loadMedicines = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch(`${API_URL}/api/medicines`);
+      const response = await fetch(`${API_URL}/medicines`);
       if (!response.ok) throw new Error('Failed to load medicines');
       const data = await response.json();
       setMedicines(data.filter((medicine) => getCurrentStock(medicine) > 0));
@@ -122,7 +122,7 @@ function SalesPos({ onSaleComplete, onBackToDashboard }) {
     };
 
     try {
-      const response = await fetch(`${API_URL}/api/sales`, {
+      const response = await fetch(`${API_URL}/sales`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

@@ -1,5 +1,3 @@
-const configuredApiUrl = import.meta.env.VITE_API_URL;
-
-// Use the local API during development, while allowing deployed builds to
-// target their public backend through VITE_API_URL.
-export const API_URL = (configuredApiUrl || 'http://localhost:5000').replace(/\/$/, '');
+// Configure this per environment. It must include the API path, for example
+// https://pharmatrack-backend-qigu.onrender.com/api.
+export const API_URL = import.meta.env.VITE_API_URL;

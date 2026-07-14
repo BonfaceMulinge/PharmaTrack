@@ -36,7 +36,7 @@ function MedicineManagement() {
 
   const fetchMedicines = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/medicines`);
+      const response = await fetch(`${API_URL}/medicines`);
       if (!response.ok) throw new Error('Failed');
       const data = await response.json();
       setMedicines(data);
@@ -47,7 +47,7 @@ function MedicineManagement() {
 
   const fetchStockMovements = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/medicines/stock-movements`);
+      const response = await fetch(`${API_URL}/medicines/stock-movements`);
       if (!response.ok) throw new Error('Failed');
       const data = await response.json();
       setStockMovements(data);
@@ -62,7 +62,7 @@ function MedicineManagement() {
     setStatus({ type: '', message: '' });
 
     try {
-      const response = await fetch(`${API_URL}/api/medicines`, {
+      const response = await fetch(`${API_URL}/medicines`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -95,7 +95,7 @@ function MedicineManagement() {
     formData.append('file', importFile);
 
     try {
-      const response = await fetch(`${API_URL}/api/medicines/import`, {
+      const response = await fetch(`${API_URL}/medicines/import`, {
         method: 'POST',
         body: formData,
       });

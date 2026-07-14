@@ -7,7 +7,7 @@ function NotificationsForecasting() {
   useEffect(() => {
     const load = async () => {
       try {
-        const response = await fetch(`${API_URL}/api/notifications`);
+        const response = await fetch(`${API_URL}/notifications`);
         if (!response.ok) throw new Error('Failed');
         const data = await response.json();
         setNotifications(data);
