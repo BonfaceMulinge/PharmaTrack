@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { API_URL } from '../api';
 
 const initialForm = {
   supplierId: '',
@@ -28,7 +29,7 @@ function PurchaseManagement() {
 
   const fetchPurchases = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/purchases');
+      const response = await fetch(`${API_URL}/api/purchases`);
       if (!response.ok) throw new Error('Failed');
       const data = await response.json();
       setPurchases(data);
@@ -40,7 +41,7 @@ function PurchaseManagement() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const response = await fetch('http://localhost:5000/api/purchases', {
+      const response = await fetch(`${API_URL}/api/purchases`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),

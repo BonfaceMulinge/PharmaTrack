@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { API_URL } from '../api';
 
 const initialForm = {
   name: '',
@@ -21,7 +22,7 @@ function SupplierManagement() {
 
   const fetchSuppliers = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/suppliers');
+      const response = await fetch(`${API_URL}/api/suppliers`);
       if (!response.ok) throw new Error('Failed');
       const data = await response.json();
       setSuppliers(data);
@@ -33,7 +34,7 @@ function SupplierManagement() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const response = await fetch('http://localhost:5000/api/suppliers', {
+      const response = await fetch(`${API_URL}/api/suppliers`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),

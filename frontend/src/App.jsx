@@ -5,6 +5,7 @@ import PurchaseManagement from './components/PurchaseManagement'
 import SalesPos from './components/SalesPos'
 import ReportingAnalytics from './components/ReportingAnalytics'
 import NotificationsForecasting from './components/NotificationsForecasting'
+import { API_URL } from './api'
 import './App.css'
 
 const formatCurrency = (value) =>
@@ -78,7 +79,7 @@ function App() {
 
   const refreshDashboardMetrics = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/reports/analytics')
+      const response = await fetch(`${API_URL}/api/reports/analytics`)
       if (!response.ok) throw new Error('Failed to refresh metrics')
       const analytics = await response.json()
 
@@ -99,7 +100,7 @@ function App() {
 
   const refreshNotifications = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/notifications')
+      const response = await fetch(`${API_URL}/api/notifications`)
       if (!response.ok) throw new Error('Failed to refresh notifications')
       const data = await response.json()
       setNotifications(data.filter((notification) => notification.type === 'LOW_STOCK').slice(0, 5))

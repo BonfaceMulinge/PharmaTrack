@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { API_URL } from '../api';
 
 const formatCurrency = (value) =>
   new Intl.NumberFormat('en-KE', {
@@ -25,7 +26,7 @@ function SalesPos({ onSaleComplete, onBackToDashboard }) {
   const loadMedicines = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch('http://localhost:5000/api/medicines');
+      const response = await fetch(`${API_URL}/api/medicines`);
       if (!response.ok) throw new Error('Failed to load medicines');
       const data = await response.json();
       setMedicines(data.filter((medicine) => getCurrentStock(medicine) > 0));
@@ -121,7 +122,7 @@ function SalesPos({ onSaleComplete, onBackToDashboard }) {
     };
 
     try {
-      const response = await fetch('http://localhost:5000/api/sales', {
+      const response = await fetch(`${API_URL}/api/sales`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

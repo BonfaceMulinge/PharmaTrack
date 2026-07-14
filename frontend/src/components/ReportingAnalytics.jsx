@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { API_URL } from '../api';
 
 const formatCurrency = (value) =>
   new Intl.NumberFormat('en-KE', {
@@ -13,7 +14,7 @@ function ReportingAnalytics() {
   useEffect(() => {
     const load = async () => {
       try {
-        const response = await fetch('http://localhost:5000/api/reports/analytics');
+        const response = await fetch(`${API_URL}/api/reports/analytics`);
         if (!response.ok) throw new Error('Failed');
         const data = await response.json();
         setAnalytics(data);

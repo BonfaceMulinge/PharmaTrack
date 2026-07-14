@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { API_URL } from '../api';
 
 const initialForm = {
   name: '',
@@ -35,7 +36,7 @@ function MedicineManagement() {
 
   const fetchMedicines = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/medicines');
+      const response = await fetch(`${API_URL}/api/medicines`);
       if (!response.ok) throw new Error('Failed');
       const data = await response.json();
       setMedicines(data);
@@ -46,7 +47,7 @@ function MedicineManagement() {
 
   const fetchStockMovements = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/medicines/stock-movements');
+      const response = await fetch(`${API_URL}/api/medicines/stock-movements`);
       if (!response.ok) throw new Error('Failed');
       const data = await response.json();
       setStockMovements(data);
@@ -61,7 +62,7 @@ function MedicineManagement() {
     setStatus({ type: '', message: '' });
 
     try {
-      const response = await fetch('http://localhost:5000/api/medicines', {
+      const response = await fetch(`${API_URL}/api/medicines`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -94,7 +95,7 @@ function MedicineManagement() {
     formData.append('file', importFile);
 
     try {
-      const response = await fetch('http://localhost:5000/api/medicines/import', {
+      const response = await fetch(`${API_URL}/api/medicines/import`, {
         method: 'POST',
         body: formData,
       });
