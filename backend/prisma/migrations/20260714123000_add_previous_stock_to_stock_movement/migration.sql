@@ -1,0 +1,2 @@
+ALTER TABLE "StockMovement"
+ADD COLUMN "previousStock" INTEGER NOT NULL DEFAULT 0;

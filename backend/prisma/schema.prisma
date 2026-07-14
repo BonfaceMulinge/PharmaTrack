@@ -218,6 +218,7 @@ model StockMovement {
   user          User?              @relation(fields: [userId], references: [id])
   type          StockMovementType
   quantity      Int
+  previousStock Int                @default(0)
   balanceAfter  Int
   referenceType String?
   referenceId   String?
@@ -259,4 +260,10 @@ model SupplierTransaction {
   supplierId   String
   supplier     Supplier  @relation(fields: [supplierId], references: [id])
   type         String
-  amount       Decima
+  amount       Decimal
+  reference    String?
+  notes        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+}

@@ -17,7 +17,10 @@ const formatCurrency = (value) =>
 const initialDashboardData = {
   todaySales: 24580,
   monthlyRevenue: 412800,
+  totalMedicines: 0,
+  totalUnitsInStock: 0,
   lowStockItems: 18,
+  outOfStockMedicines: 0,
   expiredMedicines: 7,
   totalTransactions: 128,
   topSellingMedicines: [
@@ -48,6 +51,7 @@ function App() {
   const [view, setView] = useState('home')
   const [dashboardData, setDashboardData] = useState(initialDashboardData)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [notifications, setNotifications] = useState([])
 
   useEffect(() => {
     if (view !== 'dashboard') return
@@ -82,7 +86,10 @@ function App() {
         ...current,
         todaySales: analytics.revenue ?? current.todaySales,
         monthlyRevenue: analytics.revenue ?? current.monthlyRevenue,
+        totalMedicines: analytics.medicines ?? current.totalMedicines,
+        totalUnitsInStock: analytics.totalUnitsInStock ?? current.totalUnitsInStock,
         lowStockItems: analytics.lowStock ?? current.lowStockItems,
+        outOfStockMedicines: analytics.outOfStock ?? current.outOfStockMedicines,
         expiredMedicines: analytics.expired ?? current.expiredMedicines,
       }))
     } catch (error) {
@@ -90,8 +97,20 @@ function App() {
     }
   }
 
+  const refreshNotifications = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/api/notifications')
+      if (!response.ok) throw new Error('Failed to refresh notifications')
+      const data = await response.json()
+      setNotifications(data.filter((notification) => notification.type === 'LOW_STOCK').slice(0, 5))
+    } catch (error) {
+      console.error(error)
+    }
+  }
+
   useEffect(() => {
     refreshDashboardMetrics()
+    refreshNotifications()
   }, [])
 
   const handleNavClick = (event, sectionId) => {
@@ -142,14 +161,16 @@ function App() {
     })
 
     refreshDashboardMetrics()
+    refreshNotifications()
   }
 
   const stats = [
     { title: "Today's Sales", value: formatCurrency(dashboardData.todaySales), change: '+12.4%' },
     { title: 'Monthly Revenue', value: formatCurrency(dashboardData.monthlyRevenue), change: '+8.1%' },
+    { title: 'Total Medicines', value: dashboardData.totalMedicines.toString(), change: 'Unique items' },
+    { title: 'Units in Stock', value: dashboardData.totalUnitsInStock.toString(), change: 'Available inventory' },
     { title: 'Low Stock Items', value: dashboardData.lowStockItems.toString(), change: 'Needs review' },
-    { title: 'Expired Medicines', value: dashboardData.expiredMedicines.toString(), change: 'Action required' },
-    { title: 'Total Transactions', value: dashboardData.totalTransactions.toString(), change: 'Live count' },
+    { title: 'Out of Stock', value: dashboardData.outOfStockMedicines.toString(), change: 'Restock needed' },
   ]
 
   if (view === 'pos') {
@@ -273,11 +294,22 @@ function App() {
             </article>
             <article className="panel">
               <div className="panel-header">
-                <h3>Quick Actions</h3>
+                <h3>Inventory Alerts</h3>
               </div>
-              <button className="primary-btn" type="button" onClick={openPos} style={{ width: '100%' }}>
-                Open POS
-              </button>
+              <ul className="activity-list">
+                {notifications.length > 0 ? notifications.map((notification) => (
+                  <li key={notification.id}>
+                    <strong>{notification.title}</strong>
+                    <span>{notification.message}</span>
+                    <small>{new Date(notification.createdAt).toLocaleString()}</small>
+                  </li>
+                )) : (
+                  <li>
+                    <strong>No active stock alerts</strong>
+                    <span>Inventory is above the configured thresholds.</span>
+                  </li>
+                )}
+              </ul>
             </article>
           </div>
         </section>

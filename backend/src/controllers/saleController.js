@@ -29,6 +29,10 @@ const createSale = async (req, res) => {
       discount: parseFloat(item.discount || 0),
     }));
 
+    if (normalizedItems.some((item) => !item.medicineId || item.quantity <= 0)) {
+      return res.status(400).json({ message: 'Each sale item must include a medicine and quantity greater than zero' });
+    }
+
     const finalReceiptNumber = receiptNumber || `RCPT-${Date.now()}`;
 
     const sale = await prisma.$transaction(async (tx) => {
@@ -69,9 +73,10 @@ const createSale = async (req, res) => {
         }
 
         if (medicine.quantity < item.quantity) {
-          throw Object.assign(new Error(`Insufficient stock for ${medicine.name}`), { statusCode: 400 });
+          throw Object.assign(new Error(`Insufficient stock for ${medicine.name}. Current Stock is ${medicine.quantity}.`), { statusCode: 400 });
         }
 
+        const previousStock = medicine.quantity;
         const remainingQuantity = medicine.quantity - item.quantity;
         await tx.medicine.update({
           where: { id: item.medicineId },
@@ -83,6 +88,7 @@ const createSale = async (req, res) => {
             medicineId: item.medicineId,
             type: 'SALE',
             quantity: item.quantity,
+            previousStock,
             balanceAfter: remainingQuantity,
             referenceType: 'Sale',
             referenceId: saleRecord.id,
@@ -125,4 +131,4 @@ const createSale = async (req, res) => {
   }
 };
 
-m
+module.exports = { getSales, createSale };

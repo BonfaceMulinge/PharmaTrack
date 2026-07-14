@@ -2,10 +2,13 @@ const prisma = require('../utils/prisma');
 
 const getAnalytics = async (_req, res) => {
   try {
-    const [sales, medicines, lowStock, expired, inventorySummary] = await Promise.all([
+    const [sales, medicines, medicineRows, expired, inventorySummary] = await Promise.all([
       prisma.sale.count({ where: { deletedAt: null } }),
       prisma.medicine.count({ where: { deletedAt: null } }),
-      prisma.medicine.count({ where: { deletedAt: null, quantity: { lte: 10 } } }),
+      prisma.medicine.findMany({
+        where: { deletedAt: null },
+        select: { quantity: true, reorderLevel: true },
+      }),
       prisma.medicine.count({
         where: {
           deletedAt: null,
@@ -18,7 +21,8 @@ const getAnalytics = async (_req, res) => {
       }),
     ]);
 
-    const outOfStock = await prisma.medicine.count({ where: { deletedAt: null, quantity: { lte: 0 } } });
+    const lowStock = medicineRows.filter((medicine) => medicine.quantity > 0 && medicine.quantity <= (medicine.reorderLevel || 10)).length;
+    const outOfStock = medicineRows.filter((medicine) => medicine.quantity <= 0).length;
 
     res.json({
       sales,

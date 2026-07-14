@@ -42,6 +42,7 @@ const createPurchase = async (req, res) => {
 
       for (const item of items) {
         let medicine = await tx.medicine.findUnique({ where: { id: item.medicineId } });
+        const previousStock = medicine?.quantity ?? 0;
 
         if (!medicine) {
           medicine = await tx.medicine.create({
@@ -69,6 +70,7 @@ const createPurchase = async (req, res) => {
             medicineId: medicine.id,
             type: 'PURCHASE',
             quantity: Number(item.quantity || 0),
+            previousStock,
             balanceAfter: medicine.quantity,
             referenceType: 'Purchase',
             referenceId: purchaseRecord.id,
@@ -88,4 +90,4 @@ const createPurchase = async (req, res) => {
   }
 };
 
-module.ex
+module.exports = { getPurchases, createPurchase };

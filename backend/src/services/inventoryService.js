@@ -94,10 +94,12 @@ const applyStockDelta = async ({
       medicineId: medicine.id,
       type: stockDelta < 0 ? 'SALE' : (type === 'SALE' ? 'SALE' : 'ADJUSTMENT'),
       quantity: Math.abs(stockDelta),
+      previousStock,
       balanceAfter: nextStock,
       referenceType: referenceType || 'Inventory',
       referenceId: referenceId || null,
       notes: `${type}: ${notes || 'Inventory update'}`,
+      userId: userId || null,
     },
   });
 

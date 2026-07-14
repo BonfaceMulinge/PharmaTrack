@@ -16,6 +16,9 @@ const initialForm = {
   categoryId: '',
 };
 
+const getCurrentStock = (medicine) => Number(medicine.currentStock ?? medicine.quantity ?? 0);
+const getLowStockThreshold = (medicine) => Number(medicine.reorderLevel || 10);
+
 function MedicineManagement() {
   const [medicines, setMedicines] = useState([]);
   const [form, setForm] = useState(initialForm);
@@ -23,9 +26,11 @@ function MedicineManagement() {
   const [importFile, setImportFile] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [status, setStatus] = useState({ type: '', message: '' });
+  const [stockMovements, setStockMovements] = useState([]);
 
   useEffect(() => {
     fetchMedicines();
+    fetchStockMovements();
   }, []);
 
   const fetchMedicines = async () => {
@@ -34,6 +39,17 @@ function MedicineManagement() {
       if (!response.ok) throw new Error('Failed');
       const data = await response.json();
       setMedicines(data);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const fetchStockMovements = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/api/medicines/stock-movements');
+      if (!response.ok) throw new Error('Failed');
+      const data = await response.json();
+      setStockMovements(data);
     } catch (error) {
       console.error(error);
     }
@@ -51,7 +67,6 @@ function MedicineManagement() {
         body: JSON.stringify({
           ...form,
           initialStock: form.initialStock,
-          quantity: form.initialStock,
         }),
       });
 
@@ -60,6 +75,7 @@ function MedicineManagement() {
       setForm(initialForm);
       setStatus({ type: 'success', message: payload.message || 'Stock updated successfully.' });
       fetchMedicines();
+      fetchStockMovements();
     } catch (error) {
       setStatus({ type: 'error', message: error.message || 'Failed to save medicine.' });
     } finally {
@@ -87,9 +103,20 @@ function MedicineManagement() {
       setImportMessage(`New Medicines: ${payload.summary.newMedicines}\nUpdated Medicines: ${payload.summary.updatedMedicines}\nTotal Units Added: ${payload.summary.totalUnitsAdded}\nErrors: ${payload.summary.errors}`);
       setImportFile(null);
       fetchMedicines();
+      fetchStockMovements();
     } catch (error) {
       setImportMessage(error.message || 'Import failed');
     }
+  };
+
+  const restockMedicine = (medicine) => {
+    setForm({
+      ...initialForm,
+      name: medicine.name,
+      costPrice: medicine.costPrice,
+      sellingPrice: medicine.sellingPrice,
+      reorderLevel: medicine.reorderLevel || 10,
+    });
   };
 
   return (
@@ -99,16 +126,16 @@ function MedicineManagement() {
           <p className="eyebrow">Inventory</p>
           <h2>Medicine Management</h2>
         </div>
-        <button className="primary-btn">+ Add Medicine</button>
+        <button className="primary-btn" type="button">+ Add Medicine</button>
       </div>
 
       <form className="medicine-form" onSubmit={handleSubmit}>
         <div className="form-grid">
           <input placeholder="Medicine Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-          <input placeholder="Initial Stock" type="number" value={form.initialStock} onChange={(e) => setForm({ ...form, initialStock: e.target.value })} />
-          <input placeholder="Cost Price" type="number" value={form.costPrice} onChange={(e) => setForm({ ...form, costPrice: e.target.value })} />
-          <input placeholder="Selling Price" type="number" value={form.sellingPrice} onChange={(e) => setForm({ ...form, sellingPrice: e.target.value })} />
-          <input placeholder="Reorder Level" type="number" value={form.reorderLevel} onChange={(e) => setForm({ ...form, reorderLevel: e.target.value })} />
+          <input placeholder="Initial Stock" type="number" min="0" value={form.initialStock} onChange={(e) => setForm({ ...form, initialStock: e.target.value })} />
+          <input placeholder="Cost Price" type="number" min="0" value={form.costPrice} onChange={(e) => setForm({ ...form, costPrice: e.target.value })} />
+          <input placeholder="Selling Price" type="number" min="0" value={form.sellingPrice} onChange={(e) => setForm({ ...form, sellingPrice: e.target.value })} />
+          <input placeholder="Reorder Level" type="number" min="0" value={form.reorderLevel} onChange={(e) => setForm({ ...form, reorderLevel: e.target.value })} />
           <input placeholder="Expiry Date" type="date" value={form.expiryDate} onChange={(e) => setForm({ ...form, expiryDate: e.target.value })} />
           <label className="checkbox-row">
             <input type="checkbox" checked={form.prescriptionRequired} onChange={(e) => setForm({ ...form, prescriptionRequired: e.target.checked })} />
@@ -131,9 +158,9 @@ function MedicineManagement() {
         <h3>Medicine Inventory</h3>
         <div className="inventory-summary">
           <div><strong>{medicines.length}</strong><span>Total Medicines</span></div>
-          <div><strong>{medicines.reduce((sum, item) => sum + Number(item.quantity || 0), 0)}</strong><span>Total Units in Stock</span></div>
-          <div><strong>{medicines.filter((item) => Number(item.quantity || 0) > 0 && Number(item.quantity || 0) < 10).length}</strong><span>Low Stock</span></div>
-          <div><strong>{medicines.filter((item) => Number(item.quantity || 0) === 0).length}</strong><span>Out of Stock</span></div>
+          <div><strong>{medicines.reduce((sum, item) => sum + getCurrentStock(item), 0)}</strong><span>Total Units in Stock</span></div>
+          <div><strong>{medicines.filter((item) => getCurrentStock(item) > 0 && getCurrentStock(item) <= getLowStockThreshold(item)).length}</strong><span>Low Stock</span></div>
+          <div><strong>{medicines.filter((item) => getCurrentStock(item) === 0).length}</strong><span>Out of Stock</span></div>
         </div>
         <table className="data-table">
           <thead>
@@ -150,13 +177,43 @@ function MedicineManagement() {
               <tr key={medicine.id}>
                 <td>
                   <div>{medicine.name}</div>
-                  {Number(medicine.quantity || 0) < 10 ? <span className="badge low-stock">Low Stock</span> : null}
-                  {Number(medicine.quantity || 0) === 0 ? <span className="badge out-stock">Out of Stock</span> : null}
+                  {getCurrentStock(medicine) > 0 && getCurrentStock(medicine) <= getLowStockThreshold(medicine) ? <span className="badge low-stock">Low Stock</span> : null}
+                  {getCurrentStock(medicine) === 0 ? <span className="badge out-stock">Out of Stock</span> : null}
                 </td>
-                <td>{medicine.quantity}</td>
+                <td>{getCurrentStock(medicine)}</td>
                 <td>{medicine.costPrice}</td>
                 <td>{medicine.sellingPrice}</td>
-                <td><button className="ghost-btn small-btn" type="button">Restock</button></td>
+                <td><button className="ghost-btn small-btn" type="button" onClick={() => restockMedicine(medicine)}>Restock</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="panel">
+        <h3>Stock History</h3>
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Medicine Name</th>
+              <th>Date & Time</th>
+              <th>Transaction Type</th>
+              <th>Quantity</th>
+              <th>Previous Stock</th>
+              <th>New Current Stock</th>
+              <th>User</th>
+            </tr>
+          </thead>
+          <tbody>
+            {stockMovements.map((movement) => (
+              <tr key={movement.id}>
+                <td>{movement.medicine?.name || movement.medicineName}</td>
+                <td>{new Date(movement.createdAt).toLocaleString()}</td>
+                <td>{movement.transactionType || movement.referenceType || movement.type}</td>
+                <td>{movement.type === 'SALE' ? '-' : '+'}{movement.quantity}</td>
+                <td>{movement.previousStock}</td>
+                <td>{movement.newCurrentStock ?? movement.balanceAfter}</td>
+                <td>{movement.userName || movement.user?.fullName || movement.user?.username || 'System'}</td>
               </tr>
             ))}
           </tbody>

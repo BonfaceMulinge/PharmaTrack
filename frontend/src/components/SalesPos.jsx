@@ -7,6 +7,8 @@ const formatCurrency = (value) =>
     maximumFractionDigits: 0,
   }).format(value ?? 0);
 
+const getCurrentStock = (medicine) => Number(medicine.currentStock ?? medicine.quantity ?? 0);
+
 function SalesPos({ onSaleComplete, onBackToDashboard }) {
   const [medicines, setMedicines] = useState([]);
   const [cart, setCart] = useState([]);
@@ -20,22 +22,22 @@ function SalesPos({ onSaleComplete, onBackToDashboard }) {
   const [success, setSuccess] = useState('');
   const [receipt, setReceipt] = useState(null);
 
-  useEffect(() => {
-    const loadMedicines = async () => {
-      try {
-        setIsLoading(true);
-        const response = await fetch('http://localhost:5000/api/medicines');
-        if (!response.ok) throw new Error('Failed to load medicines');
-        const data = await response.json();
-        setMedicines(data.filter((medicine) => medicine.quantity > 0));
-      } catch (err) {
-        console.error(err);
-        setError('Unable to load medicines right now.');
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  const loadMedicines = async () => {
+    try {
+      setIsLoading(true);
+      const response = await fetch('http://localhost:5000/api/medicines');
+      if (!response.ok) throw new Error('Failed to load medicines');
+      const data = await response.json();
+      setMedicines(data.filter((medicine) => getCurrentStock(medicine) > 0));
+    } catch (err) {
+      console.error(err);
+      setError('Unable to load medicines right now.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
+  useEffect(() => {
     loadMedicines();
   }, []);
 
@@ -55,9 +57,10 @@ function SalesPos({ onSaleComplete, onBackToDashboard }) {
     setError('');
     setCart((current) => {
       const existing = current.find((item) => item.medicineId === medicine.id);
+      const currentStock = getCurrentStock(medicine);
       if (existing) {
-        if (existing.quantity >= medicine.quantity) {
-          setError(`Only ${medicine.quantity} unit(s) available for ${medicine.name}.`);
+        if (existing.quantity >= currentStock) {
+          setError(`Only ${currentStock} unit(s) available for ${medicine.name}.`);
           return current;
         }
         return current.map((item) =>
@@ -65,7 +68,7 @@ function SalesPos({ onSaleComplete, onBackToDashboard }) {
         );
       }
 
-      return [...current, { medicineId: medicine.id, name: medicine.name, unitPrice: Number(medicine.sellingPrice), quantity: 1, availableQuantity: medicine.quantity }];
+      return [...current, { medicineId: medicine.id, name: medicine.name, unitPrice: Number(medicine.sellingPrice), quantity: 1, availableQuantity: currentStock }];
     });
   };
 
@@ -143,6 +146,7 @@ function SalesPos({ onSaleComplete, onBackToDashboard }) {
       }
       setCart([]);
       setReceiptNumber('');
+      loadMedicines();
     } catch (err) {
       setError(err.message || 'Unable to complete the sale.');
     } finally {
@@ -206,7 +210,7 @@ function SalesPos({ onSaleComplete, onBackToDashboard }) {
                   <div className="medicine-card-body">
                     <div className="pill-row">
                       <span className="pill">{medicine.category?.name || 'Uncategorized'}</span>
-                      <span className="pill">Qty {medicine.quantity}</span>
+                      <span className="pill">Stock {getCurrentStock(medicine)}</span>
                     </div>
                     <h4>{medicine.name}</h4>
                     <p>{medicine.genericName || 'Generic name unavailable'}</p>
