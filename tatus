@@ -1,0 +1,5 @@
+[33me09f7b1[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m)[m Regenerate Prisma client to match simplified Medicine schema
+[33mdaeaa2d[m Fix Excel import: normalize headers, add row logging, track totalUnitsAdded, fix error display
+[33mfc96087[m[33m ([m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m Simplify medicines module and improve Excel import
+[33mda375f6[m Simplify Medicines module: 5 core fields, Excel import with validation, sample download
+[33mc161a68[m[33m ([m[1;32magents/traditional-echidna[m[33m)[m Fix frontend API URLs for production
