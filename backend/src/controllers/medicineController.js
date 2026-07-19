@@ -53,6 +53,10 @@ const validateCategory = (category) => {
   return match || 'Other';
 };
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const safeUserId = (userId) => (userId && UUID_RE.test(userId) ? userId : null);
+
 const createStockMovement = async (tx, { medicine, previousStock, quantity, type, referenceType, referenceId, notes, userId }) => {
   return tx.stockMovement.create({
     data: {
@@ -64,7 +68,7 @@ const createStockMovement = async (tx, { medicine, previousStock, quantity, type
       referenceType,
       referenceId: referenceId || medicine.id,
       notes,
-      userId: userId || null,
+      userId: safeUserId(userId),
     },
   });
 };
@@ -339,9 +343,9 @@ const importMedicines = async (req, res) => {
       });
     }
 
-    await prisma.$transaction(async (tx) => {
-      for (const item of aggregatedRows.values()) {
-        try {
+    for (const item of aggregatedRows.values()) {
+      try {
+        await prisma.$transaction(async (tx) => {
           let medicine = await tx.medicine.findFirst({
             where: {
               deletedAt: null,
@@ -397,12 +401,12 @@ const importMedicines = async (req, res) => {
               userId: req.user?.id,
             });
           }
-        } catch (err) {
-          summary.failedRows += 1;
-          summary.errors.push({ row: item.rowIndex, message: err.message });
-        }
+        });
+      } catch (err) {
+        summary.failedRows += 1;
+        summary.errors.push({ row: item.rowIndex, message: err.message });
       }
-    });
+    }
 
     console.log('[Import] Result:', JSON.stringify(summary));
 
