@@ -1,114 +1,20 @@
 const prisma = require('../utils/prisma');
 
-const createLowStockNotification = async (tx, userId, medicine) => {
+const createLowStockNotification = async (tx, pharmacyId, userId, medicine) => {
   if (!medicine || medicine.quantity > 10) return null;
 
   return tx.notification.create({
     data: {
+      pharmacyId,
       userId,
       type: 'LOW_STOCK',
-      title: medicine.quantity <= 0 ? 'Out of stock alert' : 'Low stock alert',
+      title: medicine.quantity <= 0 ? 'Out of Stock' : 'Low Stock Alert',
       message:
         medicine.quantity <= 0
           ? `${medicine.name} is out of stock and cannot be sold until restocked.`
-          : `${medicine.name} is at ${medicine.quantity} units and needs restocking.`,
+          : `${medicine.name} is at ${medicine.quantity} unit(s) and needs restocking.`,
     },
   });
 };
 
-const applyStockDelta = async ({
-  tx,
-  medicineId,
-  medicineName,
-  delta,
-  type,
-  userId,
-  referenceType,
-  referenceId,
-  notes,
-  costPrice,
-  sellingPrice,
-  category,
-}) => {
-  const normalizedName = String(medicineName || '').trim();
-  const stockDelta = Number(delta || 0);
-
-  if (!medicineId && !normalizedName) {
-    throw new Error('Medicine name is required');
-  }
-
-  let medicine = null;
-  let created = false;
-
-  if (medicineId) {
-    medicine = await tx.medicine.findUnique({ where: { id: medicineId } });
-  }
-
-  if (!medicine && normalizedName) {
-    medicine = await tx.medicine.findFirst({
-      where: {
-        deletedAt: null,
-        name: {
-          contains: normalizedName,
-          mode: 'insensitive',
-        },
-      },
-      orderBy: { createdAt: 'asc' },
-    });
-  }
-
-  const previousStock = medicine?.quantity ?? 0;
-  const nextStock = previousStock + stockDelta;
-
-  if (stockDelta < 0 && nextStock < 0) {
-    throw new Error(`Insufficient stock for ${medicine?.name || normalizedName}`);
-  }
-
-  if (!medicine) {
-    created = true;
-    medicine = await tx.medicine.create({
-      data: {
-        name: normalizedName,
-        costPrice: Number(costPrice || 0),
-        sellingPrice: Number(sellingPrice || 0),
-        quantity: Math.max(nextStock, 0),
-        category: category || 'Other',
-      },
-    });
-  } else {
-    medicine = await tx.medicine.update({
-      where: { id: medicine.id },
-      data: {
-        quantity: nextStock,
-        ...(costPrice !== undefined ? { costPrice: Number(costPrice) } : {}),
-        ...(sellingPrice !== undefined ? { sellingPrice: Number(sellingPrice) } : {}),
-        ...(category !== undefined ? { category } : {}),
-      },
-    });
-  }
-
-  await tx.stockMovement.create({
-    data: {
-      medicineId: medicine.id,
-      type: stockDelta < 0 ? 'SALE' : (type === 'SALE' ? 'SALE' : 'ADJUSTMENT'),
-      quantity: Math.abs(stockDelta),
-      previousStock,
-      balanceAfter: nextStock,
-      referenceType: referenceType || 'Inventory',
-      referenceId: referenceId || null,
-      notes: `${type}: ${notes || 'Inventory update'}`,
-      userId: userId || null,
-    },
-  });
-
-  await createLowStockNotification(tx, userId, medicine);
-
-  return {
-    medicine,
-    previousStock,
-    newStock: nextStock,
-    created,
-  };
-};
-
-module.exports = { applyStockDelta, createLowStockNotification };
+module.exports = { createLowStockNotification };

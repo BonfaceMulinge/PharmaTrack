@@ -1,128 +1,62 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
+import LoginPage from './components/LoginPage'
+import RegisterPage from './components/RegisterPage'
+import HomePage from './components/HomePage'
 import MedicineManagement from './components/MedicineManagement'
-import SupplierManagement from './components/SupplierManagement'
-import PurchaseManagement from './components/PurchaseManagement'
 import SalesPos from './components/SalesPos'
-import ReportingAnalytics from './components/ReportingAnalytics'
 import NotificationsForecasting from './components/NotificationsForecasting'
-import { API_URL } from './api'
+import UserManagement from './components/UserManagement'
+import { getAccessToken, getUser, clearTokens, setUser } from './api'
 import './App.css'
 
-const formatCurrency = (value) =>
-  new Intl.NumberFormat('en-KE', {
-    style: 'currency',
-    currency: 'KES',
-    maximumFractionDigits: 0,
-  }).format(value ?? 0)
-
-const timeAgo = (dateString) => {
-  const seconds = Math.floor((Date.now() - new Date(dateString).getTime()) / 1000)
-  if (seconds < 60) return `${seconds}s ago`
-  const minutes = Math.floor(seconds / 60)
-  if (minutes < 60) return `${minutes}m ago`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}h ago`
-  const days = Math.floor(hours / 24)
-  return `${days}d ago`
-}
-
-const emptyDashboard = {
-  todayRevenue: 0,
-  monthlyRevenue: 0,
-  totalMedicines: 0,
-  totalUnitsInStock: 0,
-  lowStock: 0,
-  outOfStock: 0,
-  todayTransactions: 0,
-  topSellingMedicines: [],
-  recentActivity: [],
-}
-
 const navItems = [
-  { label: 'Home', id: 'home' },
-  { label: 'Dashboard', id: 'dashboard' },
-  { label: 'Medicines', id: 'medicines' },
-  { label: 'Suppliers', id: 'suppliers' },
-  { label: 'Purchases', id: 'purchases' },
-  { label: 'Sales', id: 'sales' },
-  { label: 'Reports', id: 'reports' },
-  { label: 'Notifications', id: 'notifications' },
+  { label: 'Home', id: 'home', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
+  { label: 'Medicines', id: 'medicines', icon: 'M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z' },
+  { label: 'Sales', id: 'sales', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01' },
+  { label: 'Notifications', id: 'notifications', icon: 'M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9' },
+]
+
+const adminNavItems = [
+  { label: 'Users', id: 'users', icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z' },
 ]
 
 function App() {
+  const [authState, setAuthState] = useState(() => {
+    const token = getAccessToken();
+    const user = getUser();
+    if (token && user) return { authenticated: true, user };
+    return { authenticated: false, user: null };
+  })
+  const [authView, setAuthView] = useState('login')
   const [activeSection, setActiveSection] = useState('home')
-  const [view, setView] = useState('home')
-  const [dashboardData, setDashboardData] = useState(emptyDashboard)
+  const [view, setView] = useState('dashboard')
   const [menuOpen, setMenuOpen] = useState(false)
-  const [notifications, setNotifications] = useState([])
 
-  const refreshDashboard = useCallback(async () => {
-    try {
-      const [analyticsRes, notificationsRes] = await Promise.all([
-        fetch(`${API_URL}/reports/analytics`),
-        fetch(`${API_URL}/notifications`),
-      ])
-
-      if (analyticsRes.ok) {
-        const analytics = await analyticsRes.json()
-        setDashboardData({
-          todayRevenue: analytics.todayRevenue ?? 0,
-          monthlyRevenue: analytics.monthlyRevenue ?? 0,
-          totalMedicines: analytics.medicines ?? 0,
-          totalUnitsInStock: analytics.totalUnitsInStock ?? 0,
-          lowStock: analytics.lowStock ?? 0,
-          outOfStock: analytics.outOfStock ?? 0,
-          todayTransactions: analytics.todayTransactions ?? 0,
-          topSellingMedicines: analytics.topSellingMedicines ?? [],
-          recentActivity: analytics.recentActivity ?? [],
-        })
-      }
-
-      if (notificationsRes.ok) {
-        const data = await notificationsRes.json()
-        setNotifications(data.filter((n) => n.type === 'LOW_STOCK').slice(0, 5))
-      }
-    } catch (error) {
-      console.error('[Dashboard] Refresh failed:', error)
-    }
+  const handleLogin = useCallback((user) => {
+    setAuthState({ authenticated: true, user })
+    setUser(user)
+    setView('dashboard')
+    setActiveSection('home')
   }, [])
 
-  useEffect(() => {
-    let cancelled = false
-    const load = async () => {
-      try {
-        const [analyticsRes, notificationsRes] = await Promise.all([
-          fetch(`${API_URL}/reports/analytics`),
-          fetch(`${API_URL}/notifications`),
-        ])
-        if (cancelled) return
-
-        if (analyticsRes.ok) {
-          const analytics = await analyticsRes.json()
-          setDashboardData({
-            todayRevenue: analytics.todayRevenue ?? 0,
-            monthlyRevenue: analytics.monthlyRevenue ?? 0,
-            totalMedicines: analytics.medicines ?? 0,
-            totalUnitsInStock: analytics.totalUnitsInStock ?? 0,
-            lowStock: analytics.lowStock ?? 0,
-            outOfStock: analytics.outOfStock ?? 0,
-            todayTransactions: analytics.todayTransactions ?? 0,
-            topSellingMedicines: analytics.topSellingMedicines ?? [],
-            recentActivity: analytics.recentActivity ?? [],
-          })
-        }
-
-        if (notificationsRes.ok) {
-          const data = await notificationsRes.json()
-          setNotifications(data.filter((n) => n.type === 'LOW_STOCK').slice(0, 5))
-        }
-      } catch (error) {
-        console.error('[Dashboard] Initial load failed:', error)
-      }
-    }
-    load()
-    return () => { cancelled = true }
+  const handleLogout = useCallback(() => {
+    clearTokens()
+    setAuthState({ authenticated: false, user: null })
+    setView('dashboard')
+    setActiveSection('home')
   }, [])
+
+  const handleNavigate = useCallback((sectionId) => {
+    setView('dashboard')
+    setActiveSection(sectionId)
+    setMenuOpen(false)
+    document.getElementById(sectionId)?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start',
+    })
+  }, [])
+
+  const handleSaleComplete = useCallback(() => {}, [])
 
   useEffect(() => {
     if (view !== 'dashboard') return
@@ -135,56 +69,25 @@ function App() {
         const visibleEntry = entries
           .filter((entry) => entry.isIntersecting)
           .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0]
-
-        if (visibleEntry) {
-          setActiveSection(visibleEntry.target.id)
-        }
+        if (visibleEntry) setActiveSection(visibleEntry.target.id)
       },
-      { threshold: [0.3, 0.6], rootMargin: '-20% 0px -40% 0px' }
+      { threshold: [0.1], rootMargin: '-10% 0px -60% 0px' }
     )
 
     sections.forEach((section) => observer.observe(section))
     return () => observer.disconnect()
   }, [view])
 
-  const handleNavClick = (event, sectionId) => {
-    event.preventDefault()
-    setView('dashboard')
-    setActiveSection(sectionId)
-    setMenuOpen(false)
-
-    document.getElementById(sectionId)?.scrollIntoView({
-      behavior: 'smooth',
-      block: 'start',
-    })
+  if (!authState.authenticated) {
+    if (authView === 'register') {
+      return <RegisterPage onSwitchToLogin={() => setAuthView('login')} />
+    }
+    return <LoginPage onLogin={handleLogin} onSwitchToRegister={() => setAuthView('register')} />
   }
 
-  const scrollToSection = (sectionId) => {
-    setView('dashboard')
-    setMenuOpen(false)
-    document.getElementById(sectionId)?.scrollIntoView({
-      behavior: 'smooth',
-      block: 'start',
-    })
-  }
-
-  const openPos = () => {
-    setView('pos')
-    setActiveSection('sales')
-  }
-
-  const handleSaleComplete = () => {
-    refreshDashboard()
-  }
-
-  const stats = [
-    { title: "Today's Sales", value: formatCurrency(dashboardData.todayRevenue) },
-    { title: 'Monthly Revenue', value: formatCurrency(dashboardData.monthlyRevenue) },
-    { title: 'Total Medicines', value: String(dashboardData.totalMedicines) },
-    { title: 'Units in Stock', value: String(dashboardData.totalUnitsInStock) },
-    { title: 'Low Stock Items', value: String(dashboardData.lowStock) },
-    { title: 'Out of Stock', value: String(dashboardData.outOfStock) },
-  ]
+  const allNavItems = authState.user?.role === 'ADMIN'
+    ? [...navItems, ...adminNavItems]
+    : navItems
 
   if (view === 'pos') {
     return (
@@ -194,14 +97,11 @@ function App() {
             <div className="brand-badge">PT</div>
             <div>
               <h2>PharmaTrack</h2>
-              <p>Pharmacy Control</p>
+              <p>{authState.user?.pharmacyName || 'Pharmacy'}</p>
             </div>
           </div>
-          <button className="menu-toggle" type="button" onClick={() => setMenuOpen((open) => !open)}>
-            ☰
-          </button>
         </header>
-        <SalesPos onSaleComplete={handleSaleComplete} onBackToDashboard={() => setView('dashboard')} />
+        <SalesPos onSaleComplete={handleSaleComplete} onBackToDashboard={() => { setView('dashboard'); setActiveSection('home'); }} />
       </div>
     )
   }
@@ -213,148 +113,61 @@ function App() {
           <div className="brand-badge">PT</div>
           <div>
             <h2>PharmaTrack</h2>
-            <p>Pharmacy Control</p>
+            <p>{authState.user?.pharmacyName || 'Pharmacy'}</p>
           </div>
         </div>
 
         <button className="menu-toggle" type="button" onClick={() => setMenuOpen((open) => !open)}>
-          ☰
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
         </button>
 
         <nav className={`nav-links ${menuOpen ? 'open' : ''}`}>
-          {navItems.map((item) => (
+          {allNavItems.map((item) => (
             <a
               key={item.id}
               className={activeSection === item.id ? 'active' : ''}
               href={`#${item.id}`}
-              onClick={(event) => handleNavClick(event, item.id)}
+              onClick={(e) => { e.preventDefault(); handleNavigate(item.id); }}
             >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d={item.icon}/></svg>
               {item.label}
             </a>
           ))}
         </nav>
+
+        <div className="nav-user">
+          <div className="nav-user-info">
+            <span className="nav-user-name">{authState.user?.fullName || 'User'}</span>
+            <span className="nav-user-role">{authState.user?.role || 'ADMIN'}</span>
+          </div>
+          <button className="ghost-btn small-btn" type="button" onClick={handleLogout}>
+            Logout
+          </button>
+        </div>
       </header>
 
       <main className="main-content">
-        <header className="topbar">
-          <div>
-            <p className="eyebrow">Operations Overview</p>
-            <h1>Admin Dashboard</h1>
-          </div>
-          <div className="topbar-actions">
-            <button className="ghost-btn" type="button" onClick={() => window.print()}>
-              Export
-            </button>
-            <button className="primary-btn" type="button" onClick={openPos}>
-              + New Sale
-            </button>
-          </div>
-        </header>
+        <div className="page-section" id="home">
+          <HomePage onNavigate={handleNavigate} />
+        </div>
 
-        <section id="home" className="page-section hero-section">
-          <div className="hero-card">
-            <div>
-              <p className="eyebrow">Pharmacy Management System</p>
-              <h2>Welcome to PharmaTrack</h2>
-              <p>Streamline dispensing, stock control, supplier orders, and sales insights from one professional platform.</p>
-              <div className="hero-actions">
-                <button className="primary-btn" type="button" onClick={openPos}>New Sale</button>
-                <button className="ghost-btn" type="button" onClick={() => scrollToSection('medicines')}>Add Medicine</button>
-                <button className="ghost-btn" type="button" onClick={() => scrollToSection('reports')}>View Reports</button>
-              </div>
-            </div>
-            <div className="hero-metrics">
-              <div className="hero-metric-card">
-                <strong>{formatCurrency(dashboardData.todayRevenue)}</strong>
-                <span>Today's Sales</span>
-              </div>
-              <div className="hero-metric-card">
-                <strong>{dashboardData.lowStock}</strong>
-                <span>Low Stock</span>
-              </div>
-              <div className="hero-metric-card">
-                <strong>{dashboardData.todayTransactions}</strong>
-                <span>Today's Transactions</span>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section id="dashboard" className="page-section">
-          <section className="stats-grid">
-            {stats.map((item) => (
-              <article key={item.title} className="stat-card">
-                <p>{item.title}</p>
-                <h3>{item.value}</h3>
-              </article>
-            ))}
-          </section>
-
-          <div className="content-grid">
-            <article className="panel">
-              <div className="panel-header">
-                <h3>Top Selling Medicines</h3>
-              </div>
-              <ul className="activity-list">
-                {dashboardData.topSellingMedicines.length > 0 ? (
-                  dashboardData.topSellingMedicines.map((item) => (
-                    <li key={item.name}>
-                      <strong>{item.name}</strong>
-                      <span>{item.qty} units sold</span>
-                    </li>
-                  ))
-                ) : (
-                  <li>
-                    <span>No sales recorded this month yet.</span>
-                  </li>
-                )}
-              </ul>
-            </article>
-            <article className="panel">
-              <div className="panel-header">
-                <h3>Inventory Alerts</h3>
-              </div>
-              <ul className="activity-list">
-                {notifications.length > 0 ? notifications.map((notification) => (
-                  <li key={notification.id}>
-                    <strong>{notification.title}</strong>
-                    <span>{notification.message}</span>
-                    <small>{timeAgo(notification.createdAt)}</small>
-                  </li>
-                )) : (
-                  <li>
-                    <strong>No active stock alerts</strong>
-                    <span>All inventory is above the configured thresholds.</span>
-                  </li>
-                )}
-              </ul>
-            </article>
-          </div>
-        </section>
-
-        <section id="medicines" className="page-section">
+        <div className="page-section" id="medicines">
           <MedicineManagement />
-        </section>
+        </div>
 
-        <section id="suppliers" className="page-section">
-          <SupplierManagement />
-        </section>
+        <div className="page-section" id="sales">
+          <SalesPos onSaleComplete={handleSaleComplete} onBackToDashboard={() => { setView('dashboard'); handleNavigate('home'); }} />
+        </div>
 
-        <section id="purchases" className="page-section">
-          <PurchaseManagement />
-        </section>
-
-        <section id="sales" className="page-section">
-          <SalesPos onSaleComplete={handleSaleComplete} onBackToDashboard={() => setView('dashboard')} />
-        </section>
-
-        <section id="reports" className="page-section">
-          <ReportingAnalytics />
-        </section>
-
-        <section id="notifications" className="page-section">
+        <div className="page-section" id="notifications">
           <NotificationsForecasting />
-        </section>
+        </div>
+
+        {authState.user?.role === 'ADMIN' && (
+          <div className="page-section" id="users">
+            <UserManagement />
+          </div>
+        )}
       </main>
     </div>
   )

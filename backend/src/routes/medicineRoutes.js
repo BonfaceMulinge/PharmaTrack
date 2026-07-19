@@ -7,11 +7,11 @@ const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
 router.get('/sample-excel', downloadSampleExcel);
-router.get('/stock-movements', authenticate, authorize('ADMIN', 'PHARMACIST', 'STORE_MANAGER'), getStockMovements);
-router.get('/', authenticate, authorize('ADMIN', 'PHARMACIST', 'STORE_MANAGER'), getMedicines);
-router.post('/', authenticate, authorize('ADMIN', 'STORE_MANAGER'), createMedicine);
-router.post('/import', authenticate, authorize('ADMIN', 'STORE_MANAGER'), upload.single('file'), importMedicines);
-router.put('/:id', authenticate, authorize('ADMIN', 'STORE_MANAGER'), updateMedicine);
-router.delete('/:id', authenticate, authorize('ADMIN', 'STORE_MANAGER'), deleteMedicine);
+router.get('/stock-movements', authenticate, authorize('ADMIN', 'PHARMACIST', 'CASHIER'), getStockMovements);
+router.get('/', authenticate, authorize('ADMIN', 'PHARMACIST', 'CASHIER'), getMedicines);
+router.post('/', authenticate, authorize('ADMIN'), createMedicine);
+router.post('/import', authenticate, authorize('ADMIN'), upload.single('file'), importMedicines);
+router.put('/:id', authenticate, authorize('ADMIN'), updateMedicine);
+router.delete('/:id', authenticate, authorize('ADMIN'), deleteMedicine);
 
 module.exports = router;

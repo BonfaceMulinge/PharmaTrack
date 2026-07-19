@@ -6,12 +6,10 @@ require('dotenv').config();
 
 const authRoutes = require('./src/routes/authRoutes');
 const medicineRoutes = require('./src/routes/medicineRoutes');
-const supplierRoutes = require('./src/routes/supplierRoutes');
-const purchaseRoutes = require('./src/routes/purchaseRoutes');
 const saleRoutes = require('./src/routes/saleRoutes');
-const reportRoutes = require('./src/routes/reportRoutes');
 const notificationRoutes = require('./src/routes/notificationRoutes');
-const { authenticate, authorize } = require('./src/middleware/auth');
+const reportRoutes = require('./src/routes/reportRoutes');
+const userRoutes = require('./src/routes/userRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -23,11 +21,10 @@ app.use(morgan('dev'));
 
 app.use('/api/auth', authRoutes);
 app.use('/api/medicines', medicineRoutes);
-app.use('/api/suppliers', supplierRoutes);
-app.use('/api/purchases', purchaseRoutes);
 app.use('/api/sales', saleRoutes);
-app.use('/api/reports', reportRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/reports', reportRoutes);
+app.use('/api/users', userRoutes);
 
 app.get('/health', async (_req, res) => {
   try {

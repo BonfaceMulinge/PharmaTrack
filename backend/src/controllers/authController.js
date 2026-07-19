@@ -3,59 +3,79 @@ const jwt = require('jsonwebtoken');
 const prisma = require('../utils/prisma');
 
 const signToken = (user) => {
-  return jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET, {
-    expiresIn: '15m',
-  });
+  return jwt.sign(
+    { id: user.id, role: user.role, pharmacyId: user.pharmacyId },
+    process.env.JWT_SECRET,
+    { expiresIn: '24h' }
+  );
 };
 
 const signRefreshToken = (user) => {
-  return jwt.sign({ id: user.id, role: user.role }, process.env.JWT_REFRESH_SECRET, {
-    expiresIn: '7d',
-  });
+  return jwt.sign(
+    { id: user.id, role: user.role, pharmacyId: user.pharmacyId },
+    process.env.JWT_REFRESH_SECRET,
+    { expiresIn: '7d' }
+  );
 };
 
 const register = async (req, res) => {
   try {
-    const { email, username, password, fullName, role = 'ADMIN', phone } = req.body;
+    const { pharmacyName, fullName, email, phone, password } = req.body;
+
+    if (!pharmacyName || !fullName || !email || !password) {
+      return res.status(400).json({ message: 'Pharmacy name, full name, email, and password are required' });
+    }
 
     const existingUser = await prisma.user.findFirst({
-      where: { OR: [{ email }, { username }] },
+      where: { OR: [{ email }] },
     });
 
     if (existingUser) {
-      return res.status(409).json({ message: 'User already exists' });
+      return res.status(409).json({ message: 'An account with this email already exists' });
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
+    const username = email.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '');
 
-    const user = await prisma.user.create({
-      data: {
-        email,
-        username,
-        passwordHash,
-        fullName,
-        role: role.toUpperCase(),
-        phone,
-      },
+    const result = await prisma.$transaction(async (tx) => {
+      const pharmacy = await tx.pharmacy.create({
+        data: { name: pharmacyName },
+      });
+
+      const user = await tx.user.create({
+        data: {
+          pharmacyId: pharmacy.id,
+          email,
+          username,
+          passwordHash,
+          fullName,
+          role: 'ADMIN',
+          phone: phone || null,
+        },
+      });
+
+      return { pharmacy, user };
     });
 
-    const token = signToken(user);
-    const refreshToken = signRefreshToken(user);
+    const token = signToken(result.user);
+    const refreshToken = signRefreshToken(result.user);
 
     res.status(201).json({
-      message: 'User registered successfully',
+      message: 'Account created successfully',
       user: {
-        id: user.id,
-        email: user.email,
-        username: user.username,
-        fullName: user.fullName,
-        role: user.role,
+        id: result.user.id,
+        email: result.user.email,
+        username: result.user.username,
+        fullName: result.user.fullName,
+        role: result.user.role,
+        pharmacyId: result.pharmacy.id,
+        pharmacyName: result.pharmacy.name,
       },
       token,
       refreshToken,
     });
   } catch (error) {
-    console.error(error);
+    console.error('[Auth] Registration error:', error);
     res.status(500).json({ message: 'Registration failed' });
   }
 };
@@ -64,7 +84,15 @@ const login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    if (!email || !password) {
+      return res.status(400).json({ message: 'Email and password are required' });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email },
+      include: { pharmacy: true },
+    });
+
     if (!user) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
@@ -94,12 +122,14 @@ const login = async (req, res) => {
         username: user.username,
         fullName: user.fullName,
         role: user.role,
+        pharmacyId: user.pharmacyId,
+        pharmacyName: user.pharmacy.name,
       },
       token,
       refreshToken,
     });
   } catch (error) {
-    console.error(error);
+    console.error('[Auth] Login error:', error);
     res.status(500).json({ message: 'Login failed' });
   }
 };
@@ -112,7 +142,10 @@ const refresh = async (req, res) => {
     }
 
     const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
-    const user = await prisma.user.findUnique({ where: { id: decoded.id } });
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.id },
+      include: { pharmacy: true },
+    });
 
     if (!user || !user.isActive) {
       return res.status(401).json({ message: 'Invalid refresh token' });
@@ -145,7 +178,19 @@ const changePassword = async (req, res) => {
 };
 
 const getProfile = async (req, res) => {
-  res.json({ user: req.user });
+  const user = req.user;
+  res.json({
+    user: {
+      id: user.id,
+      email: user.email,
+      username: user.username,
+      fullName: user.fullName,
+      role: user.role,
+      phone: user.phone,
+      pharmacyId: user.pharmacyId,
+      pharmacyName: user.pharmacy?.name,
+    },
+  });
 };
 
 module.exports = { register, login, refresh, changePassword, getProfile };

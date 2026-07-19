@@ -1,21 +1,22 @@
 const prisma = require('../utils/prisma');
 
-const getSales = async (_req, res) => {
+const getSales = async (req, res) => {
   try {
     const sales = await prisma.sale.findMany({
-      where: { deletedAt: null },
-      include: { customer: true, items: true, payments: true },
+      where: { deletedAt: null, pharmacyId: req.pharmacyId },
+      include: { items: true, payments: true, user: { select: { fullName: true, username: true } } },
       orderBy: { createdAt: 'desc' },
     });
     res.json(sales);
   } catch (error) {
+    console.error('[Sales] Fetch error:', error);
     res.status(500).json({ message: 'Failed to fetch sales' });
   }
 };
 
 const createSale = async (req, res) => {
   try {
-    const { customerId, totalAmount, discount, tax, paymentMethod, receiptNumber, items, payments } = req.body;
+    const { totalAmount, discount, tax, paymentMethod, receiptNumber, items, payments } = req.body;
 
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ message: 'Cart is empty' });
@@ -38,7 +39,7 @@ const createSale = async (req, res) => {
     const sale = await prisma.$transaction(async (tx) => {
       const saleRecord = await tx.sale.create({
         data: {
-          customerId,
+          pharmacyId: req.pharmacyId,
           userId: req.user.id,
           totalAmount: parseFloat(totalAmount || normalizedItems.reduce((sum, item) => sum + item.totalAmount, 0)),
           discount: parseFloat(discount || 0),
@@ -85,6 +86,7 @@ const createSale = async (req, res) => {
 
         await tx.stockMovement.create({
           data: {
+            pharmacyId: req.pharmacyId,
             medicineId: item.medicineId,
             type: 'SALE',
             quantity: item.quantity,
@@ -100,14 +102,27 @@ const createSale = async (req, res) => {
         if (remainingQuantity <= 10) {
           await tx.notification.create({
             data: {
+              pharmacyId: req.pharmacyId,
               userId: req.user.id,
               type: 'LOW_STOCK',
-              title: 'Low stock alert',
-              message: `${medicine.name} is below the reorder threshold.`,
+              title: remainingQuantity <= 0 ? 'Out of Stock' : 'Low Stock Alert',
+              message: remainingQuantity <= 0
+                ? `${medicine.name} is out of stock.`
+                : `${medicine.name} has only ${remainingQuantity} unit(s) remaining.`,
             },
           });
         }
       }
+
+      await tx.notification.create({
+        data: {
+          pharmacyId: req.pharmacyId,
+          userId: req.user.id,
+          type: 'SALE_COMPLETED',
+          title: 'Sale Completed',
+          message: `Sale ${finalReceiptNumber} completed for KES ${Number(saleRecord.totalAmount).toLocaleString()}.`,
+        },
+      });
 
       return saleRecord;
     });
@@ -117,7 +132,6 @@ const createSale = async (req, res) => {
     if (error.statusCode === 400) {
       return res.status(400).json({ message: error.message });
     }
-
     console.error('[Sales] Create error:', error);
     return res.status(500).json({ message: 'Failed to create sale' });
   }

@@ -7,8 +7,22 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Pharmacy {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+  users     User[]
+  medicines Medicine[]
+  sales     Sale[]
+  stockMovements StockMovement[]
+  notifications Notification[]
+}
+
 model User {
   id               String          @id @default(uuid())
+  pharmacyId       String
   email            String          @unique
   username         String          @unique
   passwordHash     String
@@ -21,53 +35,15 @@ model User {
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
   deletedAt        DateTime?
+  pharmacy         Pharmacy        @relation(fields: [pharmacyId], references: [id])
   auditLogs        AuditLog[]
-  purchases        Purchase[]
   sales            Sale[]
   stockMovements   StockMovement[]
 }
 
-model Category {
-  id          String     @id @default(uuid())
-  name        String     @unique
-  description String?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-  deletedAt   DateTime?
-}
-
-model Supplier {
-  id            String                @id @default(uuid())
-  name          String
-  contactPerson String?
-  phone         String?
-  email         String?
-  address       String?
-  taxNumber     String?
-  paymentTerms  String?
-  balance       Decimal               @default(0)
-  createdAt     DateTime              @default(now())
-  updatedAt     DateTime              @updatedAt
-  deletedAt     DateTime?
-  purchases     Purchase[]
-  transactions  SupplierTransaction[]
-}
-
-model Customer {
-  id            String    @id @default(uuid())
-  name          String
-  phone         String?   @unique
-  email         String?   @unique
-  address       String?
-  loyaltyPoints Int       @default(0)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  deletedAt     DateTime?
-  sales         Sale[]
-}
-
 model Medicine {
   id             String          @id @default(uuid())
+  pharmacyId     String
   name           String
   quantity       Int             @default(0)
   costPrice      Decimal
@@ -76,50 +52,14 @@ model Medicine {
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   deletedAt      DateTime?
-  purchaseItems  PurchaseItem[]
+  pharmacy       Pharmacy        @relation(fields: [pharmacyId], references: [id])
   saleItems      SaleItem[]
   stockMovements StockMovement[]
 }
 
-model Purchase {
-  id            String         @id @default(uuid())
-  supplierId    String
-  userId        String
-  invoiceNumber String         @unique
-  purchaseDate  DateTime       @default(now())
-  totalAmount   Decimal
-  discount      Decimal        @default(0)
-  tax           Decimal        @default(0)
-  status        String         @default("PENDING")
-  notes         String?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  deletedAt     DateTime?
-  supplier      Supplier       @relation(fields: [supplierId], references: [id])
-  user          User           @relation(fields: [userId], references: [id])
-  items         PurchaseItem[]
-}
-
-model PurchaseItem {
-  id           String    @id @default(uuid())
-  purchaseId   String
-  medicineId   String
-  quantity     Int
-  costPrice    Decimal
-  sellingPrice Decimal
-  totalAmount  Decimal
-  batchNumber  String?
-  expiryDate   DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  deletedAt    DateTime?
-  medicine     Medicine  @relation(fields: [medicineId], references: [id])
-  purchase     Purchase  @relation(fields: [purchaseId], references: [id])
-}
-
 model Sale {
   id            String        @id @default(uuid())
-  customerId    String?
+  pharmacyId    String
   userId        String
   saleDate      DateTime      @default(now())
   totalAmount   Decimal
@@ -132,10 +72,10 @@ model Sale {
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
   deletedAt     DateTime?
-  payments      Payment[]
-  customer      Customer?     @relation(fields: [customerId], references: [id])
+  pharmacy      Pharmacy      @relation(fields: [pharmacyId], references: [id])
   user          User          @relation(fields: [userId], references: [id])
   items         SaleItem[]
+  payments      Payment[]
 }
 
 model SaleItem {
@@ -168,6 +108,7 @@ model Payment {
 
 model StockMovement {
   id            String            @id @default(uuid())
+  pharmacyId    String
   medicineId    String
   userId        String?
   type          StockMovementType
@@ -180,6 +121,7 @@ model StockMovement {
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
   deletedAt     DateTime?
+  pharmacy      Pharmacy          @relation(fields: [pharmacyId], references: [id])
   medicine      Medicine          @relation(fields: [medicineId], references: [id])
   user          User?             @relation(fields: [userId], references: [id])
 }
@@ -200,34 +142,23 @@ model AuditLog {
 }
 
 model Notification {
-  id        String           @id @default(uuid())
-  userId    String?
-  type      NotificationType
-  title     String
-  message   String
-  isRead    Boolean          @default(false)
-  createdAt DateTime         @default(now())
-  updatedAt DateTime         @updatedAt
-  deletedAt DateTime?
-}
-
-model SupplierTransaction {
-  id         String    @id @default(uuid())
-  supplierId String
-  type       String
-  amount     Decimal
-  reference  String?
-  notes      String?
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  id         String           @id @default(uuid())
+  pharmacyId String
+  userId     String?
+  type       NotificationType
+  title      String
+  message    String
+  isRead     Boolean          @default(false)
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
   deletedAt  DateTime?
-  supplier   Supplier  @relation(fields: [supplierId], references: [id])
+  pharmacy   Pharmacy         @relation(fields: [pharmacyId], references: [id])
 }
 
 enum UserRole {
   ADMIN
   PHARMACIST
-  STORE_MANAGER
+  CASHIER
 }
 
 enum PaymentMethod {
@@ -238,17 +169,13 @@ enum PaymentMethod {
 }
 
 enum StockMovementType {
-  PURCHASE
   SALE
   ADJUSTMENT
-  TRANSFER
   RETURN
 }
 
 enum NotificationType {
   LOW_STOCK
-  EXPIRED_MEDICINE
-  FAILED_LOGIN
-  NEW_PURCHASE
   SALE_COMPLETED
+  IMPORT_COMPLETED
 }

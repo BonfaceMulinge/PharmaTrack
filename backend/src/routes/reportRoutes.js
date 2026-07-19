@@ -4,6 +4,6 @@ const { authenticate, authorize } = require('../middleware/auth');
 
 const router = express.Router();
 
-router.get('/analytics', authenticate, authorize('ADMIN', 'STORE_MANAGER', 'PHARMACIST'), getAnalytics);
+router.get('/analytics', authenticate, authorize('ADMIN', 'PHARMACIST', 'CASHIER'), getAnalytics);
 
 module.exports = router;

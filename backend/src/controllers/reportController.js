@@ -1,10 +1,11 @@
 const prisma = require('../utils/prisma');
 
-const getAnalytics = async (_req, res) => {
+const getAnalytics = async (req, res) => {
   try {
     const now = new Date();
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const pharmacyId = req.pharmacyId;
 
     const [
       totalSales,
@@ -16,33 +17,33 @@ const getAnalytics = async (_req, res) => {
       recentSales,
       topSelling,
     ] = await Promise.all([
-      prisma.sale.count({ where: { deletedAt: null } }),
+      prisma.sale.count({ where: { deletedAt: null, pharmacyId } }),
 
       prisma.sale.aggregate({
-        where: { deletedAt: null, saleDate: { gte: startOfToday } },
-        _sum: { totalAmount: true },
+        where: { deletedAt: null, pharmacyId, saleDate: { gte: startOfToday } },
+        _sum: { totalAmount: true, discount: true, tax: true },
         _count: true,
       }),
 
       prisma.sale.aggregate({
-        where: { deletedAt: null, saleDate: { gte: startOfMonth } },
+        where: { deletedAt: null, pharmacyId, saleDate: { gte: startOfMonth } },
         _sum: { totalAmount: true },
       }),
 
-      prisma.medicine.count({ where: { deletedAt: null } }),
+      prisma.medicine.count({ where: { deletedAt: null, pharmacyId } }),
 
       prisma.medicine.findMany({
-        where: { deletedAt: null },
+        where: { deletedAt: null, pharmacyId },
         select: { id: true, name: true, quantity: true, costPrice: true, sellingPrice: true },
       }),
 
       prisma.medicine.aggregate({
-        where: { deletedAt: null },
+        where: { deletedAt: null, pharmacyId },
         _sum: { quantity: true },
       }),
 
       prisma.sale.findMany({
-        where: { deletedAt: null, saleDate: { gte: startOfToday } },
+        where: { deletedAt: null, pharmacyId, saleDate: { gte: startOfToday } },
         include: { items: true },
         orderBy: { createdAt: 'desc' },
         take: 10,
@@ -50,7 +51,7 @@ const getAnalytics = async (_req, res) => {
 
       prisma.saleItem.groupBy({
         by: ['medicineId'],
-        where: { deletedAt: null, sale: { deletedAt: null, saleDate: { gte: startOfMonth } } },
+        where: { deletedAt: null, sale: { deletedAt: null, pharmacyId, saleDate: { gte: startOfMonth } } },
         _sum: { quantity: true, totalAmount: true },
         orderBy: { _sum: { quantity: 'desc' } },
         take: 5,
@@ -64,9 +65,28 @@ const getAnalytics = async (_req, res) => {
       return sum + Number(m.costPrice) * m.quantity;
     }, 0);
 
+    const totalStockUnits = inventoryAggregate._sum.quantity || 0;
+
     const todayRevenue = Number(todaySalesAggregate._sum.totalAmount || 0);
+    const todayDiscount = Number(todaySalesAggregate._sum.discount || 0);
+    const todayTax = Number(todaySalesAggregate._sum.tax || 0);
     const todayTransactions = todaySalesAggregate._count || 0;
     const monthlyRevenue = Number(monthlySalesAggregate._sum.totalAmount || 0);
+
+    let todayProfit = 0;
+    if (recentSales.length > 0) {
+      const saleIds = recentSales.map((s) => s.id);
+      const allSaleItems = await prisma.saleItem.findMany({
+        where: { saleId: { in: saleIds }, deletedAt: null },
+      });
+      const medicineMap = new Map(medicineRows.map((m) => [m.id, m]));
+      for (const item of allSaleItems) {
+        const med = medicineMap.get(item.medicineId);
+        if (med) {
+          todayProfit += (Number(item.unitPrice) - Number(med.costPrice)) * item.quantity;
+        }
+      }
+    }
 
     const medicineMap = new Map(medicineRows.map((m) => [m.id, m.name]));
 
@@ -81,7 +101,7 @@ const getAnalytics = async (_req, res) => {
     const recentActivity = recentSales.map((sale) => ({
       id: sale.id,
       title: 'Sale completed',
-      detail: `Receipt ${sale.receiptNumber} • ${sale.items.length} item(s)`,
+      detail: `Receipt ${sale.receiptNumber} \u2022 ${sale.items.length} item(s)`,
       amount: Number(sale.totalAmount),
       time: sale.createdAt,
     }));
@@ -91,11 +111,11 @@ const getAnalytics = async (_req, res) => {
       medicines: totalMedicines,
       lowStock,
       outOfStock,
-      totalUnitsInStock: inventoryAggregate._sum.quantity || 0,
+      totalUnitsInStock: totalStockUnits,
       todayRevenue,
       todayTransactions,
+      todayProfit,
       monthlyRevenue,
-      revenue: todayRevenue,
       inventoryValue,
       topSellingMedicines,
       recentActivity,

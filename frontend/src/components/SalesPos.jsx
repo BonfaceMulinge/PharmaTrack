@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { API_URL } from '../api';
+import { authFetch, API_URL, getUser } from '../api';
 
 const formatCurrency = (value) =>
   new Intl.NumberFormat('en-KE', {
@@ -26,7 +26,7 @@ function SalesPos({ onSaleComplete, onBackToDashboard }) {
   const loadMedicines = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch(`${API_URL}/medicines`);
+      const response = await authFetch(`${API_URL}/medicines`);
       if (!response.ok) throw new Error('Failed to load medicines');
       const data = await response.json();
       setMedicines(data.filter((medicine) => getCurrentStock(medicine) > 0));
@@ -43,7 +43,7 @@ function SalesPos({ onSaleComplete, onBackToDashboard }) {
     const load = async () => {
       try {
         setIsLoading(true);
-        const response = await fetch(`${API_URL}/medicines`);
+        const response = await authFetch(`${API_URL}/medicines`);
         if (cancelled) return;
         if (!response.ok) throw new Error('Failed to load medicines');
         const data = await response.json();
@@ -83,7 +83,6 @@ function SalesPos({ onSaleComplete, onBackToDashboard }) {
           item.medicineId === medicine.id ? { ...item, quantity: item.quantity + 1 } : item
         );
       }
-
       return [...current, { medicineId: medicine.id, name: medicine.name, unitPrice: Number(medicine.sellingPrice), quantity: 1, availableQuantity: currentStock }];
     });
   };
@@ -120,13 +119,14 @@ function SalesPos({ onSaleComplete, onBackToDashboard }) {
     setError('');
     setSuccess('');
 
+    const finalReceipt = receiptNumber || `RCPT-${crypto.randomUUID().slice(0, 8)}`;
+
     const payload = {
-      customerId: null,
       totalAmount: total,
       discount: 0,
       tax: 0,
       paymentMethod,
-      receiptNumber: receiptNumber || `RCPT-${crypto.randomUUID().slice(0, 8)}`,
+      receiptNumber: finalReceipt,
       items: cart.map((item) => ({
         medicineId: item.medicineId,
         quantity: item.quantity,
@@ -137,29 +137,27 @@ function SalesPos({ onSaleComplete, onBackToDashboard }) {
     };
 
     try {
-      const response = await fetch(`${API_URL}/sales`, {
+      const response = await authFetch(`${API_URL}/sales`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
 
       const result = await response.json();
       if (!response.ok) throw new Error(result.message || 'Sale failed');
 
-      const finalReceipt = {
-        receiptNumber: result.receiptNumber || payload.receiptNumber,
-        cashierName: 'Demo Cashier',
+      const user = getUser();
+      const receiptData = {
+        receiptNumber: result.receiptNumber || finalReceipt,
+        cashierName: user?.fullName || 'Cashier',
         paymentMethod,
         date: new Date().toLocaleString('en-KE'),
         items: cart.map((item) => ({ ...item, subtotal: item.quantity * item.unitPrice })),
         total,
       };
 
-      setReceipt(finalReceipt);
+      setReceipt(receiptData);
       setSuccess(result.message || 'Sale completed successfully');
-      if (onSaleComplete) {
-        onSaleComplete({ totalAmount: total, items: cart });
-      }
+      if (onSaleComplete) onSaleComplete();
       setCart([]);
       setReceiptNumber('');
       loadMedicines();
@@ -179,13 +177,13 @@ function SalesPos({ onSaleComplete, onBackToDashboard }) {
         </div>
         <div className="topbar-actions">
           <button className="ghost-btn" type="button" onClick={onBackToDashboard}>
-            ← Back to Dashboard
+            &larr; Back
           </button>
         </div>
       </div>
 
-      {error ? <div className="status-banner error-banner">{error}</div> : null}
-      {success ? <div className="status-banner success-banner">{success}</div> : null}
+      {error && <div className="status-banner error-banner">{error}</div>}
+      {success && <div className="status-banner success-banner">{success}</div>}
 
       <div className="pos-layout">
         <section className="panel pos-products">
@@ -195,23 +193,16 @@ function SalesPos({ onSaleComplete, onBackToDashboard }) {
           </div>
 
           <div className="pos-filters">
-            <input
-              className="search-input"
-              placeholder="Search by medicine name"
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-            />
+            <input className="search-input" placeholder="Search by medicine name" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} />
             <select value={selectedCategory} onChange={(event) => setSelectedCategory(event.target.value)}>
               {categories.map((category) => (
-                <option key={category} value={category}>
-                  {category}
-                </option>
+                <option key={category} value={category}>{category}</option>
               ))}
             </select>
           </div>
 
           {isLoading ? (
-            <div className="loading-state">Loading medicines…</div>
+            <div className="loading-state">Loading medicines...</div>
           ) : (
             <div className="medicine-grid">
               {filteredMedicines.map((medicine) => (
@@ -234,6 +225,9 @@ function SalesPos({ onSaleComplete, onBackToDashboard }) {
                   </div>
                 </article>
               ))}
+              {filteredMedicines.length === 0 && (
+                <div className="empty-state-full">No medicines available</div>
+              )}
             </div>
           )}
         </section>
@@ -255,19 +249,13 @@ function SalesPos({ onSaleComplete, onBackToDashboard }) {
                     <p>{formatCurrency(item.unitPrice)} each</p>
                   </div>
                   <div className="qty-controls">
-                    <button className="qty-btn" type="button" onClick={() => updateQuantity(item.medicineId, -1)}>
-                      −
-                    </button>
+                    <button className="qty-btn" type="button" onClick={() => updateQuantity(item.medicineId, -1)}>&minus;</button>
                     <span>{item.quantity}</span>
-                    <button className="qty-btn" type="button" onClick={() => updateQuantity(item.medicineId, 1)}>
-                      +
-                    </button>
+                    <button className="qty-btn" type="button" onClick={() => updateQuantity(item.medicineId, 1)}>+</button>
                   </div>
                   <div className="cart-meta">
                     <strong>{formatCurrency(item.quantity * item.unitPrice)}</strong>
-                    <button className="ghost-btn small-btn" type="button" onClick={() => removeFromCart(item.medicineId)}>
-                      Remove
-                    </button>
+                    <button className="ghost-btn small-btn" type="button" onClick={() => removeFromCart(item.medicineId)}>Remove</button>
                   </div>
                 </div>
               ))}
@@ -276,49 +264,42 @@ function SalesPos({ onSaleComplete, onBackToDashboard }) {
 
           <form onSubmit={handleSubmit} className="checkout-form">
             <div className="form-grid">
-              <input
-                placeholder="Receipt Number"
-                value={receiptNumber}
-                onChange={(event) => setReceiptNumber(event.target.value)}
-              />
+              <input placeholder="Receipt Number" value={receiptNumber} onChange={(event) => setReceiptNumber(event.target.value)} />
               <select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)}>
                 <option value="CASH">Cash</option>
                 <option value="CARD">Card</option>
                 <option value="MOBILE_MONEY">Mobile Money</option>
               </select>
             </div>
-
             <div className="checkout-summary">
               <div className="summary-line">
                 <span>Total</span>
                 <strong>{formatCurrency(total)}</strong>
               </div>
               <button className="primary-btn" type="submit" disabled={isSubmitting}>
-                {isSubmitting ? 'Processing…' : 'Complete Sale'}
+                {isSubmitting ? 'Processing...' : 'Complete Sale'}
               </button>
             </div>
           </form>
 
-          {receipt ? (
+          {receipt && (
             <div className="receipt-card">
-              <h4>Receipt Preview</h4>
+              <h4>Receipt</h4>
               <p><strong>#{receipt.receiptNumber}</strong></p>
               <p>{receipt.date}</p>
               <p>Cashier: {receipt.cashierName}</p>
               <ul>
                 {receipt.items.map((item) => (
                   <li key={item.medicineId}>
-                    {item.name} × {item.quantity} — {formatCurrency(item.subtotal)}
+                    {item.name} x {item.quantity} &mdash; {formatCurrency(item.subtotal)}
                   </li>
                 ))}
               </ul>
               <p><strong>Total: {formatCurrency(receipt.total)}</strong></p>
               <p>Payment: {receipt.paymentMethod}</p>
-              <button className="ghost-btn" type="button" onClick={() => window.print()}>
-                Print Receipt
-              </button>
+              <button className="ghost-btn" type="button" onClick={() => window.print()}>Print Receipt</button>
             </div>
-          ) : null}
+          )}
         </aside>
       </div>
     </div>

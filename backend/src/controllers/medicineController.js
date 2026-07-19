@@ -1,18 +1,7 @@
 const prisma = require('../utils/prisma');
 const XLSX = require('xlsx');
 
-const VALID_CATEGORIES = [
-  'Tablets',
-  'Capsules',
-  'Syrup',
-  'Injection',
-  'Cream',
-  'Drops',
-  'Ointment',
-  'Eye Drops',
-  'Ear Drops',
-  'Other',
-];
+const VALID_CATEGORIES = ['Tablets', 'Capsules', 'Syrup', 'Injection', 'Cream', 'Drops', 'Other'];
 
 const toNumber = (value, fallback = 0) => {
   const number = Number(value);
@@ -32,9 +21,10 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 const safeUserId = (userId) => (userId && UUID_RE.test(userId) ? userId : null);
 
-const createStockMovement = async (tx, { medicine, previousStock, quantity, type, referenceType, referenceId, notes, userId }) => {
+const createStockMovement = async (tx, { pharmacyId, medicine, previousStock, quantity, type, referenceType, referenceId, notes, userId }) => {
   return tx.stockMovement.create({
     data: {
+      pharmacyId,
       medicineId: medicine.id,
       type,
       quantity,
@@ -55,14 +45,15 @@ const serializeMedicine = (medicine) => ({
   costPrice: medicine.costPrice,
   sellingPrice: medicine.sellingPrice,
   category: medicine.category,
+  inventoryValue: Number(medicine.costPrice) * medicine.quantity,
   createdAt: medicine.createdAt,
   updatedAt: medicine.updatedAt,
 });
 
-const getMedicines = async (_req, res) => {
+const getMedicines = async (req, res) => {
   try {
     const medicines = await prisma.medicine.findMany({
-      where: { deletedAt: null },
+      where: { deletedAt: null, pharmacyId: req.pharmacyId },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -89,16 +80,15 @@ const createMedicine = async (req, res) => {
       let medicine = await tx.medicine.findFirst({
         where: {
           deletedAt: null,
-          name: {
-            equals: name,
-            mode: 'insensitive',
-          },
+          pharmacyId: req.pharmacyId,
+          name: { equals: name, mode: 'insensitive' },
         },
       });
 
       if (!medicine) {
         medicine = await tx.medicine.create({
           data: {
+            pharmacyId: req.pharmacyId,
             name,
             costPrice,
             sellingPrice,
@@ -107,21 +97,20 @@ const createMedicine = async (req, res) => {
           },
         });
 
-        await createStockMovement(tx, {
-          medicine,
-          previousStock: 0,
-          quantity: initialStock,
-          type: 'ADJUSTMENT',
-          referenceType: 'Manual Entry',
-          notes: 'Medicine created with initial stock',
-          userId: req.user?.id,
-        });
+        if (initialStock > 0) {
+          await createStockMovement(tx, {
+            pharmacyId: req.pharmacyId,
+            medicine,
+            previousStock: 0,
+            quantity: initialStock,
+            type: 'ADJUSTMENT',
+            referenceType: 'Manual Entry',
+            notes: 'Medicine created with initial stock',
+            userId: req.user?.id,
+          });
+        }
 
-        return {
-          medicine,
-          created: true,
-          message: `Medicine created. Current Stock is now ${medicine.quantity}.`,
-        };
+        return { medicine, created: true, message: `Medicine created. Current Stock is now ${medicine.quantity}.` };
       }
 
       const previousStock = medicine.quantity;
@@ -129,16 +118,12 @@ const createMedicine = async (req, res) => {
 
       medicine = await tx.medicine.update({
         where: { id: medicine.id },
-        data: {
-          quantity: nextStock,
-          costPrice,
-          sellingPrice,
-          category,
-        },
+        data: { quantity: nextStock, costPrice, sellingPrice, category },
       });
 
       if (initialStock > 0) {
         await createStockMovement(tx, {
+          pharmacyId: req.pharmacyId,
           medicine,
           previousStock,
           quantity: initialStock,
@@ -149,11 +134,7 @@ const createMedicine = async (req, res) => {
         });
       }
 
-      return {
-        medicine,
-        created: false,
-        message: `Medicine updated. Current Stock is now ${medicine.quantity}.`,
-      };
+      return { medicine, created: false, message: `Medicine updated. Current Stock is now ${medicine.quantity}.` };
     });
 
     res.status(result.created ? 201 : 200).json({
@@ -194,13 +175,7 @@ const importMedicines = async (req, res) => {
     const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
     const sheetName = workbook.SheetNames[0];
     const rawRows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' });
-
     const rows = rawRows.map(normalizeHeaders);
-
-    console.log(`[Import] Parsed ${rows.length} rows from "${sheetName}"`);
-    if (rows.length > 0) {
-      console.log('[Import] Column headers detected:', Object.keys(rows[0]));
-    }
 
     const summary = {
       totalRows: rows.length,
@@ -220,8 +195,6 @@ const importMedicines = async (req, res) => {
       const costPriceRaw = resolveColumn(row, 'Cost Price', 'CostPrice', 'costPrice');
       const sellingPriceRaw = resolveColumn(row, 'Selling Price', 'SellingPrice', 'sellingPrice');
       const categoryRaw = resolveColumn(row, 'Category', 'category');
-
-      console.log(`[Import] Row ${rowNumber}:`, JSON.stringify({ name, stockRaw, costPriceRaw, sellingPriceRaw, categoryRaw }));
 
       if (!name || !String(name).trim()) {
         rowErrors.push({ row: rowNumber, message: 'Medicine Name is required' });
@@ -272,18 +245,13 @@ const importMedicines = async (req, res) => {
       }
     });
 
-    console.log(`[Import] Validation complete: ${aggregatedRows.size} valid, ${rowErrors.length} failed`);
-
     if (rowErrors.length > 0) {
       summary.failedRows = rowErrors.length;
       summary.errors = rowErrors;
     }
 
     if (aggregatedRows.size === 0) {
-      return res.status(400).json({
-        message: 'No valid rows to import',
-        summary,
-      });
+      return res.status(400).json({ message: 'No valid rows to import', summary });
     }
 
     for (const item of aggregatedRows.values()) {
@@ -292,16 +260,15 @@ const importMedicines = async (req, res) => {
           let medicine = await tx.medicine.findFirst({
             where: {
               deletedAt: null,
-              name: {
-                equals: item.name,
-                mode: 'insensitive',
-              },
+              pharmacyId: req.pharmacyId,
+              name: { equals: item.name, mode: 'insensitive' },
             },
           });
 
           if (!medicine) {
             medicine = await tx.medicine.create({
               data: {
+                pharmacyId: req.pharmacyId,
                 name: item.name,
                 costPrice: item.costPrice,
                 sellingPrice: item.sellingPrice,
@@ -312,6 +279,7 @@ const importMedicines = async (req, res) => {
             summary.created += 1;
             summary.totalUnitsAdded += item.stock;
             await createStockMovement(tx, {
+              pharmacyId: req.pharmacyId,
               medicine,
               previousStock: 0,
               quantity: item.stock,
@@ -335,6 +303,7 @@ const importMedicines = async (req, res) => {
             summary.updated += 1;
             summary.totalUnitsAdded += item.stock;
             await createStockMovement(tx, {
+              pharmacyId: req.pharmacyId,
               medicine,
               previousStock,
               quantity: item.stock,
@@ -351,12 +320,16 @@ const importMedicines = async (req, res) => {
       }
     }
 
-    console.log('[Import] Result:', JSON.stringify(summary));
-
-    res.json({
-      message: 'Import completed',
-      summary,
+    await prisma.notification.create({
+      data: {
+        pharmacyId: req.pharmacyId,
+        type: 'IMPORT_COMPLETED',
+        title: 'Import Completed',
+        message: `Import finished: ${summary.created} created, ${summary.updated} updated, ${summary.totalUnitsAdded} units added.`,
+      },
     });
+
+    res.json({ message: 'Import completed', summary });
   } catch (error) {
     console.error('[Import] Fatal error:', error);
     res.status(500).json({ message: 'Failed to import medicines' });
@@ -366,8 +339,10 @@ const importMedicines = async (req, res) => {
 const updateMedicine = async (req, res) => {
   try {
     const medicine = await prisma.$transaction(async (tx) => {
-      const existing = await tx.medicine.findUnique({ where: { id: req.params.id } });
-      if (!existing || existing.deletedAt) {
+      const existing = await tx.medicine.findFirst({
+        where: { id: req.params.id, pharmacyId: req.pharmacyId, deletedAt: null },
+      });
+      if (!existing) {
         throw Object.assign(new Error('Medicine not found'), { statusCode: 404 });
       }
 
@@ -388,33 +363,24 @@ const updateMedicine = async (req, res) => {
         data.category = validateCategory(req.body.category);
       }
 
-      const updated = await tx.medicine.update({
-        where: { id: req.params.id },
-        data,
-      });
-
-      return updated;
+      return tx.medicine.update({ where: { id: req.params.id }, data });
     });
 
     res.json(serializeMedicine(medicine));
   } catch (error) {
-    if (error.statusCode === 404) {
-      return res.status(404).json({ message: error.message });
-    }
-    if (error.statusCode === 400) {
-      return res.status(400).json({ message: error.message });
-    }
+    if (error.statusCode === 404) return res.status(404).json({ message: error.message });
+    if (error.statusCode === 400) return res.status(400).json({ message: error.message });
     res.status(500).json({ message: 'Failed to update medicine' });
   }
 };
 
-const getStockMovements = async (_req, res) => {
+const getStockMovements = async (req, res) => {
   try {
     const movements = await prisma.stockMovement.findMany({
-      where: { deletedAt: null },
+      where: { deletedAt: null, pharmacyId: req.pharmacyId },
       include: { medicine: true, user: true },
       orderBy: { createdAt: 'desc' },
-      take: 20,
+      take: 50,
     });
 
     res.json(
@@ -439,6 +405,14 @@ const getStockMovements = async (_req, res) => {
 
 const deleteMedicine = async (req, res) => {
   try {
+    const existing = await prisma.medicine.findFirst({
+      where: { id: req.params.id, pharmacyId: req.pharmacyId, deletedAt: null },
+    });
+
+    if (!existing) {
+      return res.status(404).json({ message: 'Medicine not found' });
+    }
+
     await prisma.medicine.update({
       where: { id: req.params.id },
       data: { deletedAt: new Date() },
@@ -461,19 +435,10 @@ const downloadSampleExcel = async (_req, res) => {
 
     const workbook = XLSX.utils.book_new();
     const worksheet = XLSX.utils.aoa_to_sheet(sampleData);
-
-    worksheet['!cols'] = [
-      { wch: 25 },
-      { wch: 18 },
-      { wch: 12 },
-      { wch: 15 },
-      { wch: 15 },
-    ];
-
+    worksheet['!cols'] = [{ wch: 25 }, { wch: 18 }, { wch: 12 }, { wch: 15 }, { wch: 15 }];
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Medicines');
 
     const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
-
     res.setHeader('Content-Disposition', 'attachment; filename=medicines-sample.xlsx');
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.send(buffer);
