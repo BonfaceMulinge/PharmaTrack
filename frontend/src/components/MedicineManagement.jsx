@@ -158,13 +158,8 @@ function MedicineManagement() {
     formData.append('file', importFile);
 
     try {
-      const headers = {};
-      const token = localStorage.getItem('pharmatrack_token');
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-
-      const response = await fetch(`${API_URL}/medicines/import`, {
+      const response = await authFetch(`${API_URL}/medicines/import`, {
         method: 'POST',
-        headers,
         body: formData,
       });
       const payload = await response.json();
