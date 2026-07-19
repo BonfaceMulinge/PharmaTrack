@@ -10,6 +10,7 @@ const saleRoutes = require('./src/routes/saleRoutes');
 const notificationRoutes = require('./src/routes/notificationRoutes');
 const reportRoutes = require('./src/routes/reportRoutes');
 const userRoutes = require('./src/routes/userRoutes');
+const superAdminRoutes = require('./src/routes/superAdminRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -25,6 +26,7 @@ app.use('/api/sales', saleRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/super-admin', superAdminRoutes);
 
 app.get('/health', async (_req, res) => {
   try {

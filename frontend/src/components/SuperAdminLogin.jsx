@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { API_URL, setTokens, setUser } from '../api';
 
-function LoginPage({ onLogin, onSwitchToSuperAdmin }) {
+function SuperAdminLogin({ onLogin }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -25,11 +25,15 @@ function LoginPage({ onLogin, onSwitchToSuperAdmin }) {
         throw new Error(data.message || 'Login failed');
       }
 
+      if (!data.user.isSuperAdmin) {
+        throw new Error('This login is for Super Admin only. Use the regular login page.');
+      }
+
       setTokens(data.token, data.refreshToken);
       setUser(data.user);
       onLogin(data.user);
     } catch (err) {
-      setError(err.message || 'Invalid email or password');
+      setError(err.message || 'Invalid credentials');
     } finally {
       setIsLoading(false);
     }
@@ -38,27 +42,27 @@ function LoginPage({ onLogin, onSwitchToSuperAdmin }) {
   return (
     <div className="auth-page">
       <div className="auth-container">
-        <div className="auth-card">
+        <div className="auth-card super-admin-card">
           <div className="auth-brand">
             <div className="auth-logo">
-              <div className="brand-badge auth-badge">PT</div>
+              <div className="brand-badge auth-badge sa-badge">SA</div>
             </div>
             <h1>PharmaTrack</h1>
-            <p>Pharmacy Inventory & POS System</p>
+            <p>System Administration</p>
           </div>
 
-          <h2>Sign In</h2>
-          <p className="auth-subtitle">Enter your credentials to access your account</p>
+          <h2>Super Admin Login</h2>
+          <p className="auth-subtitle">Authorized personnel only</p>
 
           {error && <div className="auth-error">{error}</div>}
 
           <form onSubmit={handleSubmit}>
             <div className="auth-field">
-              <label htmlFor="email">Email Address</label>
+              <label htmlFor="sa-email">Email Address</label>
               <input
-                id="email"
+                id="sa-email"
                 type="email"
-                placeholder="you@example.com"
+                placeholder="admin@pharmatrack.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -67,9 +71,9 @@ function LoginPage({ onLogin, onSwitchToSuperAdmin }) {
             </div>
 
             <div className="auth-field">
-              <label htmlFor="password">Password</label>
+              <label htmlFor="sa-password">Password</label>
               <input
-                id="password"
+                id="sa-password"
                 type="password"
                 placeholder="Enter your password"
                 value={password}
@@ -80,24 +84,13 @@ function LoginPage({ onLogin, onSwitchToSuperAdmin }) {
             </div>
 
             <button className="auth-submit" type="submit" disabled={isLoading}>
-              {isLoading ? 'Signing In...' : 'Sign In'}
+              {isLoading ? 'Authenticating...' : 'Access Admin Panel'}
             </button>
           </form>
-
-          <p className="auth-switch">
-            Need an account? Contact your pharmacy administrator or{' '}
-            <a href="mailto:support@pharmatrack.com" className="auth-link-btn">
-              PharmaTrack Administration
-            </a>
-          </p>
-
-          <button type="button" className="super-admin-link" onClick={onSwitchToSuperAdmin}>
-            System Administrator Login
-          </button>
         </div>
       </div>
     </div>
   );
 }
 
-export default LoginPage;
+export default SuperAdminLogin;

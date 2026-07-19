@@ -1320,3 +1320,50 @@ body {
     width: 100%;
   }
 }
+
+/* ===== SUPER ADMIN ===== */
+.sa-badge {
+  background: linear-gradient(135deg, #6366f1, #4338ca) !important;
+}
+
+.super-admin-card {
+  border-color: rgba(99, 102, 241, 0.2);
+}
+
+.super-admin-card .auth-submit {
+  background: linear-gradient(135deg, #6366f1, #4338ca);
+}
+
+.super-admin-card .auth-submit:hover:not(:disabled) {
+  box-shadow: 0 8px 20px rgba(99, 102, 241, 0.3);
+}
+
+.super-admin-link {
+  display: inline-block;
+  margin-top: 16px;
+  color: #8ca0bb;
+  font-size: 0.85rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.2s;
+}
+
+.super-admin-link:hover {
+  color: #6366f1;
+  text-decoration: underline;
+}
+
+.badge-trial {
+  background: rgba(99, 102, 241, 0.16);
+  color: #a5b4fc;
+}
+
+code {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  font-family: monospace;
+}

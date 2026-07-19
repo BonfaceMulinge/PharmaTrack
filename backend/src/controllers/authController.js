@@ -4,7 +4,7 @@ const prisma = require('../utils/prisma');
 
 const signToken = (user) => {
   return jwt.sign(
-    { id: user.id, role: user.role, pharmacyId: user.pharmacyId },
+    { id: user.id, role: user.role, pharmacyId: user.pharmacyId, isSuperAdmin: user.isSuperAdmin },
     process.env.JWT_SECRET,
     { expiresIn: '24h' }
   );
@@ -12,72 +12,10 @@ const signToken = (user) => {
 
 const signRefreshToken = (user) => {
   return jwt.sign(
-    { id: user.id, role: user.role, pharmacyId: user.pharmacyId },
+    { id: user.id, role: user.role, pharmacyId: user.pharmacyId, isSuperAdmin: user.isSuperAdmin },
     process.env.JWT_REFRESH_SECRET,
     { expiresIn: '7d' }
   );
-};
-
-const register = async (req, res) => {
-  try {
-    const { pharmacyName, fullName, email, phone, password } = req.body;
-
-    if (!pharmacyName || !fullName || !email || !password) {
-      return res.status(400).json({ message: 'Pharmacy name, full name, email, and password are required' });
-    }
-
-    const existingUser = await prisma.user.findFirst({
-      where: { OR: [{ email }] },
-    });
-
-    if (existingUser) {
-      return res.status(409).json({ message: 'An account with this email already exists' });
-    }
-
-    const passwordHash = await bcrypt.hash(password, 10);
-    const username = email.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '');
-
-    const result = await prisma.$transaction(async (tx) => {
-      const pharmacy = await tx.pharmacy.create({
-        data: { name: pharmacyName },
-      });
-
-      const user = await tx.user.create({
-        data: {
-          pharmacyId: pharmacy.id,
-          email,
-          username,
-          passwordHash,
-          fullName,
-          role: 'ADMIN',
-          phone: phone || null,
-        },
-      });
-
-      return { pharmacy, user };
-    });
-
-    const token = signToken(result.user);
-    const refreshToken = signRefreshToken(result.user);
-
-    res.status(201).json({
-      message: 'Account created successfully',
-      user: {
-        id: result.user.id,
-        email: result.user.email,
-        username: result.user.username,
-        fullName: result.user.fullName,
-        role: result.user.role,
-        pharmacyId: result.pharmacy.id,
-        pharmacyName: result.pharmacy.name,
-      },
-      token,
-      refreshToken,
-    });
-  } catch (error) {
-    console.error('[Auth] Registration error:', error);
-    res.status(500).json({ message: 'Registration failed' });
-  }
 };
 
 const login = async (req, res) => {
@@ -97,13 +35,35 @@ const login = async (req, res) => {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
+    if (user.lockedUntil && user.lockedUntil > new Date()) {
+      return res.status(423).json({ message: 'Account is locked. Please try again later.' });
+    }
+
     const isValidPassword = await bcrypt.compare(password, user.passwordHash);
     if (!isValidPassword) {
+      const failedCount = user.failedLoginCount + 1;
+      const lockUntil = failedCount >= 5 ? new Date(Date.now() + 15 * 60 * 1000) : null;
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { failedLoginCount: failedCount, lockedUntil: lockUntil },
+      });
+      if (lockUntil) {
+        return res.status(423).json({ message: 'Account locked due to too many failed attempts. Try again in 15 minutes.' });
+      }
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
     if (!user.isActive) {
-      return res.status(403).json({ message: 'Account is disabled' });
+      return res.status(403).json({ message: 'Account is disabled. Contact your administrator.' });
+    }
+
+    if (!user.isSuperAdmin && user.pharmacy) {
+      if (user.pharmacy.subscriptionStatus === 'SUSPENDED') {
+        return res.status(403).json({ message: 'Pharmacy subscription is suspended. Contact the system administrator.' });
+      }
+      if (user.pharmacy.subscriptionStatus === 'EXPIRED') {
+        return res.status(403).json({ message: 'Pharmacy subscription has expired. Contact the system administrator.' });
+      }
     }
 
     const token = signToken(user);
@@ -111,7 +71,7 @@ const login = async (req, res) => {
 
     await prisma.user.update({
       where: { id: user.id },
-      data: { lastLoginAt: new Date(), failedLoginCount: 0 },
+      data: { lastLoginAt: new Date(), failedLoginCount: 0, lockedUntil: null },
     });
 
     res.json({
@@ -122,8 +82,10 @@ const login = async (req, res) => {
         username: user.username,
         fullName: user.fullName,
         role: user.role,
+        isSuperAdmin: user.isSuperAdmin,
+        mustChangePassword: user.mustChangePassword,
         pharmacyId: user.pharmacyId,
-        pharmacyName: user.pharmacy.name,
+        pharmacyName: user.pharmacy?.name || null,
       },
       token,
       refreshToken,
@@ -169,7 +131,10 @@ const changePassword = async (req, res) => {
     }
 
     const passwordHash = await bcrypt.hash(newPassword, 10);
-    await prisma.user.update({ where: { id: user.id }, data: { passwordHash } });
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash, mustChangePassword: false },
+    });
 
     res.json({ message: 'Password changed successfully' });
   } catch (error) {
@@ -187,10 +152,12 @@ const getProfile = async (req, res) => {
       fullName: user.fullName,
       role: user.role,
       phone: user.phone,
+      isSuperAdmin: user.isSuperAdmin,
+      mustChangePassword: user.mustChangePassword,
       pharmacyId: user.pharmacyId,
       pharmacyName: user.pharmacy?.name,
     },
   });
 };
 
-module.exports = { register, login, refresh, changePassword, getProfile };
+module.exports = { login, refresh, changePassword, getProfile };
