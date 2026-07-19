@@ -14,31 +14,6 @@ const VALID_CATEGORIES = [
   'Other',
 ];
 
-const demoMedicines = [
-  {
-    id: 'demo-1',
-    name: 'Paracetamol 500mg',
-    quantity: 30,
-    costPrice: 5,
-    sellingPrice: 10,
-    category: 'Tablets',
-    createdAt: new Date(),
-  },
-  {
-    id: 'demo-2',
-    name: 'Amoxicillin 250mg',
-    quantity: 18,
-    costPrice: 12,
-    sellingPrice: 18,
-    category: 'Capsules',
-    createdAt: new Date(),
-  },
-];
-
-const demoMovements = [];
-
-const isDemoMode = () => process.env.NODE_ENV !== 'production';
-
 const toNumber = (value, fallback = 0) => {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
@@ -93,9 +68,7 @@ const getMedicines = async (_req, res) => {
 
     res.json(medicines.map(serializeMedicine));
   } catch (error) {
-    if (isDemoMode()) {
-      return res.json(demoMedicines.map(serializeMedicine));
-    }
+    console.error('[Medicines] Fetch error:', error);
     res.status(500).json({ message: 'Failed to fetch medicines' });
   }
 };
@@ -189,37 +162,7 @@ const createMedicine = async (req, res) => {
       created: result.created,
     });
   } catch (error) {
-    if (isDemoMode()) {
-      const matchingMedicine = demoMedicines.find((item) => item.name.toLowerCase() === name.toLowerCase());
-      if (matchingMedicine) {
-        matchingMedicine.quantity += initialStock;
-        matchingMedicine.costPrice = costPrice || matchingMedicine.costPrice;
-        matchingMedicine.sellingPrice = sellingPrice || matchingMedicine.sellingPrice;
-        matchingMedicine.category = category;
-        return res.status(200).json({
-          medicine: serializeMedicine(matchingMedicine),
-          message: `Medicine updated. Current Stock is now ${matchingMedicine.quantity}.`,
-          created: false,
-        });
-      }
-
-      const newMedicine = {
-        id: `demo-${demoMedicines.length + 1}`,
-        name,
-        quantity: initialStock,
-        costPrice,
-        sellingPrice,
-        category,
-        createdAt: new Date(),
-      };
-      demoMedicines.push(newMedicine);
-      return res.status(201).json({
-        medicine: serializeMedicine(newMedicine),
-        message: `Medicine created. Current Stock is now ${newMedicine.quantity}.`,
-        created: true,
-      });
-    }
-
+    console.error('[Medicines] Create error:', error);
     res.status(500).json({ message: 'Failed to create medicine' });
   }
 };
@@ -416,41 +359,6 @@ const importMedicines = async (req, res) => {
     });
   } catch (error) {
     console.error('[Import] Fatal error:', error);
-
-    if (isDemoMode()) {
-      const summary = {
-        totalRows: aggregatedRows.size + rowErrors.length,
-        created: 0,
-        updated: 0,
-        totalUnitsAdded: 0,
-        failedRows: rowErrors.length,
-        errors: rowErrors,
-      };
-      for (const item of aggregatedRows.values()) {
-        const existing = demoMedicines.find((m) => m.name.toLowerCase() === item.name.toLowerCase());
-        if (existing) {
-          existing.quantity += item.stock;
-          existing.costPrice = item.costPrice;
-          existing.sellingPrice = item.sellingPrice;
-          existing.category = item.category;
-          summary.updated += 1;
-        } else {
-          demoMedicines.push({
-            id: `demo-${demoMedicines.length + 1}`,
-            name: item.name,
-            quantity: item.stock,
-            costPrice: item.costPrice,
-            sellingPrice: item.sellingPrice,
-            category: item.category,
-            createdAt: new Date(),
-          });
-          summary.created += 1;
-        }
-        summary.totalUnitsAdded += item.stock;
-      }
-      return res.json({ message: 'Import completed', summary });
-    }
-
     res.status(500).json({ message: 'Failed to import medicines' });
   }
 };
@@ -524,9 +432,7 @@ const getStockMovements = async (_req, res) => {
       }))
     );
   } catch (error) {
-    if (isDemoMode()) {
-      return res.json(demoMovements.slice(0, 20));
-    }
+    console.error('[Medicines] Stock movements error:', error);
     res.status(500).json({ message: 'Failed to fetch stock movements' });
   }
 };

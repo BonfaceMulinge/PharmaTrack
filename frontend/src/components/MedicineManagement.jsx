@@ -44,8 +44,28 @@ function MedicineManagement() {
   const [showForm, setShowForm] = useState(false);
 
   useEffect(() => {
-    fetchMedicines();
-    fetchStockMovements();
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const [medsRes, movementsRes] = await Promise.all([
+          fetch(`${API_URL}/medicines`),
+          fetch(`${API_URL}/medicines/stock-movements`),
+        ]);
+        if (cancelled) return;
+        if (medsRes.ok) {
+          const data = await medsRes.json();
+          setMedicines(data);
+        }
+        if (movementsRes.ok) {
+          const data = await movementsRes.json();
+          setStockMovements(data);
+        }
+      } catch (error) {
+        console.error(error);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
   }, []);
 
   const fetchMedicines = async () => {

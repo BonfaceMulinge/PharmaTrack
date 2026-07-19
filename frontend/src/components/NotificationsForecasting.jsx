@@ -3,28 +3,48 @@ import { API_URL } from '../api';
 
 function NotificationsForecasting() {
   const [notifications, setNotifications] = useState([]);
+  const [lowStockMedicines, setLowStockMedicines] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false
     const load = async () => {
       try {
-        const response = await fetch(`${API_URL}/notifications`);
-        if (!response.ok) throw new Error('Failed');
-        const data = await response.json();
-        setNotifications(data);
-      } catch (error) {
-        console.error(error);
-      }
-    };
+        setLoading(true)
+        const [notifRes, medRes] = await Promise.all([
+          fetch(`${API_URL}/notifications`),
+          fetch(`${API_URL}/medicines`),
+        ])
 
-    load();
-  }, []);
+        if (cancelled) return
+
+        if (notifRes.ok) {
+          const data = await notifRes.json()
+          setNotifications(data)
+        }
+
+        if (medRes.ok) {
+          const data = await medRes.json()
+          setLowStockMedicines(
+            data.filter((m) => m.quantity <= 10).sort((a, b) => a.quantity - b.quantity)
+          )
+        }
+      } catch (error) {
+        console.error('[Notifications] Load error:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [])
 
   return (
     <div className="medicine-page">
       <div className="page-header">
         <div>
           <p className="eyebrow">Smart Operations</p>
-          <h2>Notifications & Forecasting</h2>
+          <h2>Notifications & Stock Alerts</h2>
         </div>
       </div>
 
@@ -32,7 +52,9 @@ function NotificationsForecasting() {
         <div className="panel">
           <h3>Alerts</h3>
           <ul className="activity-list">
-            {notifications.length === 0 ? (
+            {loading ? (
+              <li>Loading notifications...</li>
+            ) : notifications.length === 0 ? (
               <li>No notifications yet.</li>
             ) : (
               notifications.map((notification) => (
@@ -47,12 +69,25 @@ function NotificationsForecasting() {
         </div>
 
         <div className="panel">
-          <h3>Demand Forecasting</h3>
-          <p style={{ color: '#c8d3e2' }}>Forecasting engine ready for historical sales integration.</p>
-          <div className="panel" style={{ marginTop: '12px' }}>
-            <p>Suggested reorder: Paracetamol • 120 units</p>
-            <p>Suggested reorder: Amoxicillin • 60 units</p>
-          </div>
+          <h3>Low Stock Medicines</h3>
+          {loading ? (
+            <p style={{ color: '#c8d3e2' }}>Loading...</p>
+          ) : lowStockMedicines.length === 0 ? (
+            <p style={{ color: '#c8d3e2' }}>All medicines are adequately stocked.</p>
+          ) : (
+            <ul className="activity-list">
+              {lowStockMedicines.map((med) => (
+                <li key={med.id}>
+                  <strong>{med.name}</strong>
+                  <span>
+                    {med.quantity === 0
+                      ? 'Out of stock'
+                      : `${med.quantity} unit${med.quantity === 1 ? '' : 's'} remaining`}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
     </div>

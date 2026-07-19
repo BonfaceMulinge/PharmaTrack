@@ -17,7 +17,20 @@ function SupplierManagement() {
   const [form, setForm] = useState(initialForm);
 
   useEffect(() => {
-    fetchSuppliers();
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const response = await fetch(`${API_URL}/suppliers`);
+        if (cancelled) return;
+        if (!response.ok) throw new Error('Failed');
+        const data = await response.json();
+        setSuppliers(data);
+      } catch (error) {
+        console.error(error);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
   }, []);
 
   const fetchSuppliers = async () => {

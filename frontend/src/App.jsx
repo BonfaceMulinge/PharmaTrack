@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import MedicineManagement from './components/MedicineManagement'
 import SupplierManagement from './components/SupplierManagement'
 import PurchaseManagement from './components/PurchaseManagement'
@@ -15,26 +15,28 @@ const formatCurrency = (value) =>
     maximumFractionDigits: 0,
   }).format(value ?? 0)
 
-const initialDashboardData = {
-  todaySales: 24580,
-  monthlyRevenue: 412800,
-  totalMedicines: 0,
-  totalUnitsInStock: 0,
-  lowStockItems: 18,
-  outOfStockMedicines: 0,
-  expiredMedicines: 7,
-  totalTransactions: 128,
-  topSellingMedicines: [
-    { name: 'Paracetamol', qty: 24 },
-    { name: 'Amoxicillin', qty: 15 },
-  ],
+const timeAgo = (dateString) => {
+  const seconds = Math.floor((Date.now() - new Date(dateString).getTime()) / 1000)
+  if (seconds < 60) return `${seconds}s ago`
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  return `${days}d ago`
 }
 
-const recentActivity = [
-  { title: 'New purchase received', detail: 'Supplier: HealthPlus Ltd', time: '10 mins ago' },
-  { title: 'Sale completed', detail: 'Receipt #1042 • 5 items', time: '22 mins ago' },
-  { title: 'Inventory adjustment', detail: 'Paracetamol batch updated', time: '1 hour ago' },
-]
+const emptyDashboard = {
+  todayRevenue: 0,
+  monthlyRevenue: 0,
+  totalMedicines: 0,
+  totalUnitsInStock: 0,
+  lowStock: 0,
+  outOfStock: 0,
+  todayTransactions: 0,
+  topSellingMedicines: [],
+  recentActivity: [],
+}
 
 const navItems = [
   { label: 'Home', id: 'home' },
@@ -44,15 +46,83 @@ const navItems = [
   { label: 'Purchases', id: 'purchases' },
   { label: 'Sales', id: 'sales' },
   { label: 'Reports', id: 'reports' },
-  { label: 'Users', id: 'users' },
+  { label: 'Notifications', id: 'notifications' },
 ]
 
 function App() {
   const [activeSection, setActiveSection] = useState('home')
   const [view, setView] = useState('home')
-  const [dashboardData, setDashboardData] = useState(initialDashboardData)
+  const [dashboardData, setDashboardData] = useState(emptyDashboard)
   const [menuOpen, setMenuOpen] = useState(false)
   const [notifications, setNotifications] = useState([])
+
+  const refreshDashboard = useCallback(async () => {
+    try {
+      const [analyticsRes, notificationsRes] = await Promise.all([
+        fetch(`${API_URL}/reports/analytics`),
+        fetch(`${API_URL}/notifications`),
+      ])
+
+      if (analyticsRes.ok) {
+        const analytics = await analyticsRes.json()
+        setDashboardData({
+          todayRevenue: analytics.todayRevenue ?? 0,
+          monthlyRevenue: analytics.monthlyRevenue ?? 0,
+          totalMedicines: analytics.medicines ?? 0,
+          totalUnitsInStock: analytics.totalUnitsInStock ?? 0,
+          lowStock: analytics.lowStock ?? 0,
+          outOfStock: analytics.outOfStock ?? 0,
+          todayTransactions: analytics.todayTransactions ?? 0,
+          topSellingMedicines: analytics.topSellingMedicines ?? [],
+          recentActivity: analytics.recentActivity ?? [],
+        })
+      }
+
+      if (notificationsRes.ok) {
+        const data = await notificationsRes.json()
+        setNotifications(data.filter((n) => n.type === 'LOW_STOCK').slice(0, 5))
+      }
+    } catch (error) {
+      console.error('[Dashboard] Refresh failed:', error)
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      try {
+        const [analyticsRes, notificationsRes] = await Promise.all([
+          fetch(`${API_URL}/reports/analytics`),
+          fetch(`${API_URL}/notifications`),
+        ])
+        if (cancelled) return
+
+        if (analyticsRes.ok) {
+          const analytics = await analyticsRes.json()
+          setDashboardData({
+            todayRevenue: analytics.todayRevenue ?? 0,
+            monthlyRevenue: analytics.monthlyRevenue ?? 0,
+            totalMedicines: analytics.medicines ?? 0,
+            totalUnitsInStock: analytics.totalUnitsInStock ?? 0,
+            lowStock: analytics.lowStock ?? 0,
+            outOfStock: analytics.outOfStock ?? 0,
+            todayTransactions: analytics.todayTransactions ?? 0,
+            topSellingMedicines: analytics.topSellingMedicines ?? [],
+            recentActivity: analytics.recentActivity ?? [],
+          })
+        }
+
+        if (notificationsRes.ok) {
+          const data = await notificationsRes.json()
+          setNotifications(data.filter((n) => n.type === 'LOW_STOCK').slice(0, 5))
+        }
+      } catch (error) {
+        console.error('[Dashboard] Initial load failed:', error)
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [])
 
   useEffect(() => {
     if (view !== 'dashboard') return
@@ -76,43 +146,6 @@ function App() {
     sections.forEach((section) => observer.observe(section))
     return () => observer.disconnect()
   }, [view])
-
-  const refreshDashboardMetrics = async () => {
-    try {
-      const response = await fetch(`${API_URL}/reports/analytics`)
-      if (!response.ok) throw new Error('Failed to refresh metrics')
-      const analytics = await response.json()
-
-      setDashboardData((current) => ({
-        ...current,
-        todaySales: analytics.revenue ?? current.todaySales,
-        monthlyRevenue: analytics.revenue ?? current.monthlyRevenue,
-        totalMedicines: analytics.medicines ?? current.totalMedicines,
-        totalUnitsInStock: analytics.totalUnitsInStock ?? current.totalUnitsInStock,
-        lowStockItems: analytics.lowStock ?? current.lowStockItems,
-        outOfStockMedicines: analytics.outOfStock ?? current.outOfStockMedicines,
-        expiredMedicines: analytics.expired ?? current.expiredMedicines,
-      }))
-    } catch (error) {
-      console.error(error)
-    }
-  }
-
-  const refreshNotifications = async () => {
-    try {
-      const response = await fetch(`${API_URL}/notifications`)
-      if (!response.ok) throw new Error('Failed to refresh notifications')
-      const data = await response.json()
-      setNotifications(data.filter((notification) => notification.type === 'LOW_STOCK').slice(0, 5))
-    } catch (error) {
-      console.error(error)
-    }
-  }
-
-  useEffect(() => {
-    refreshDashboardMetrics()
-    refreshNotifications()
-  }, [])
 
   const handleNavClick = (event, sectionId) => {
     event.preventDefault()
@@ -140,38 +173,17 @@ function App() {
     setActiveSection('sales')
   }
 
-  const handleSaleComplete = ({ totalAmount, items }) => {
-    setDashboardData((current) => {
-      const nextTopSelling = [...current.topSellingMedicines]
-      items.forEach((item) => {
-        const existing = nextTopSelling.find((entry) => entry.name === item.name)
-        if (existing) {
-          existing.qty += item.quantity
-        } else {
-          nextTopSelling.push({ name: item.name, qty: item.quantity })
-        }
-      })
-
-      return {
-        ...current,
-        todaySales: current.todaySales + totalAmount,
-        monthlyRevenue: current.monthlyRevenue + totalAmount,
-        totalTransactions: current.totalTransactions + 1,
-        topSellingMedicines: nextTopSelling.sort((a, b) => b.qty - a.qty).slice(0, 3),
-      }
-    })
-
-    refreshDashboardMetrics()
-    refreshNotifications()
+  const handleSaleComplete = () => {
+    refreshDashboard()
   }
 
   const stats = [
-    { title: "Today's Sales", value: formatCurrency(dashboardData.todaySales), change: '+12.4%' },
-    { title: 'Monthly Revenue', value: formatCurrency(dashboardData.monthlyRevenue), change: '+8.1%' },
-    { title: 'Total Medicines', value: dashboardData.totalMedicines.toString(), change: 'Unique items' },
-    { title: 'Units in Stock', value: dashboardData.totalUnitsInStock.toString(), change: 'Available inventory' },
-    { title: 'Low Stock Items', value: dashboardData.lowStockItems.toString(), change: 'Needs review' },
-    { title: 'Out of Stock', value: dashboardData.outOfStockMedicines.toString(), change: 'Restock needed' },
+    { title: "Today's Sales", value: formatCurrency(dashboardData.todayRevenue) },
+    { title: 'Monthly Revenue', value: formatCurrency(dashboardData.monthlyRevenue) },
+    { title: 'Total Medicines', value: String(dashboardData.totalMedicines) },
+    { title: 'Units in Stock', value: String(dashboardData.totalUnitsInStock) },
+    { title: 'Low Stock Items', value: String(dashboardData.lowStock) },
+    { title: 'Out of Stock', value: String(dashboardData.outOfStock) },
   ]
 
   if (view === 'pos') {
@@ -253,16 +265,16 @@ function App() {
             </div>
             <div className="hero-metrics">
               <div className="hero-metric-card">
-                <strong>{formatCurrency(dashboardData.todaySales)}</strong>
-                <span>Today’s Sales</span>
+                <strong>{formatCurrency(dashboardData.todayRevenue)}</strong>
+                <span>Today's Sales</span>
               </div>
               <div className="hero-metric-card">
-                <strong>{dashboardData.lowStockItems}</strong>
+                <strong>{dashboardData.lowStock}</strong>
                 <span>Low Stock</span>
               </div>
               <div className="hero-metric-card">
-                <strong>{dashboardData.expiredMedicines}</strong>
-                <span>Expiring Soon</span>
+                <strong>{dashboardData.todayTransactions}</strong>
+                <span>Today's Transactions</span>
               </div>
             </div>
           </div>
@@ -274,7 +286,6 @@ function App() {
               <article key={item.title} className="stat-card">
                 <p>{item.title}</p>
                 <h3>{item.value}</h3>
-                <span>{item.change}</span>
               </article>
             ))}
           </section>
@@ -285,12 +296,18 @@ function App() {
                 <h3>Top Selling Medicines</h3>
               </div>
               <ul className="activity-list">
-                {dashboardData.topSellingMedicines.map((item) => (
-                  <li key={item.name}>
-                    <strong>{item.name}</strong>
-                    <span>{item.qty} units sold</span>
+                {dashboardData.topSellingMedicines.length > 0 ? (
+                  dashboardData.topSellingMedicines.map((item) => (
+                    <li key={item.name}>
+                      <strong>{item.name}</strong>
+                      <span>{item.qty} units sold</span>
+                    </li>
+                  ))
+                ) : (
+                  <li>
+                    <span>No sales recorded this month yet.</span>
                   </li>
-                ))}
+                )}
               </ul>
             </article>
             <article className="panel">
@@ -302,12 +319,12 @@ function App() {
                   <li key={notification.id}>
                     <strong>{notification.title}</strong>
                     <span>{notification.message}</span>
-                    <small>{new Date(notification.createdAt).toLocaleString()}</small>
+                    <small>{timeAgo(notification.createdAt)}</small>
                   </li>
                 )) : (
                   <li>
                     <strong>No active stock alerts</strong>
-                    <span>Inventory is above the configured thresholds.</span>
+                    <span>All inventory is above the configured thresholds.</span>
                   </li>
                 )}
               </ul>
@@ -333,81 +350,10 @@ function App() {
 
         <section id="reports" className="page-section">
           <ReportingAnalytics />
+        </section>
+
+        <section id="notifications" className="page-section">
           <NotificationsForecasting />
-        </section>
-
-        <section id="users" className="page-section">
-          <div className="medicine-page">
-            <div className="page-header">
-              <div>
-                <p className="eyebrow">Access Control</p>
-                <h2>User Management</h2>
-              </div>
-            </div>
-
-            <div className="panel">
-              <h3>Active Users</h3>
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Role</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td>Admin User</td>
-                    <td>Administrator</td>
-                    <td>Active</td>
-                  </tr>
-                  <tr>
-                    <td>Grace Wanjiku</td>
-                    <td>Pharmacist</td>
-                    <td>Active</td>
-                  </tr>
-                  <tr>
-                    <td>Daniel Otieno</td>
-                    <td>Store Manager</td>
-                    <td>Active</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </section>
-
-        <section className="content-grid page-section" id="performance">
-          <article className="panel large-panel">
-            <div className="panel-header">
-              <h3>Sales Performance</h3>
-              <button className="ghost-btn" type="button" onClick={() => scrollToSection('reports')}>
-                View Report
-              </button>
-            </div>
-            <div className="chart-placeholder">
-              <div className="bar one" />
-              <div className="bar two" />
-              <div className="bar three" />
-              <div className="bar four" />
-              <div className="bar five" />
-            </div>
-          </article>
-
-          <article className="panel">
-            <div className="panel-header">
-              <h3>Recent Activity</h3>
-            </div>
-            <ul className="activity-list">
-              {recentActivity.map((item) => (
-                <li key={item.title}>
-                  <strong>{item.title}</strong>
-                  <span>{item.detail}</span>
-                  <small>{item.time}</small>
-                </li>
-              ))}
-            </ul>
-          </article>
         </section>
       </main>
     </div>

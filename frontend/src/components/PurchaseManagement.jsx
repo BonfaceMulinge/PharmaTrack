@@ -24,7 +24,20 @@ function PurchaseManagement() {
   const [form, setForm] = useState(initialForm);
 
   useEffect(() => {
-    fetchPurchases();
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const response = await fetch(`${API_URL}/purchases`);
+        if (cancelled) return;
+        if (!response.ok) throw new Error('Failed');
+        const data = await response.json();
+        setPurchases(data);
+      } catch (error) {
+        console.error(error);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
   }, []);
 
   const fetchPurchases = async () => {

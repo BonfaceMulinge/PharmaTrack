@@ -118,15 +118,7 @@ const createSale = async (req, res) => {
       return res.status(400).json({ message: error.message });
     }
 
-    if (process.env.NODE_ENV !== 'production') {
-      return res.status(201).json({
-        sale: null,
-        receiptNumber: req.body.receiptNumber || `RCPT-${Date.now()}`,
-        message: 'Demo sale completed successfully',
-        demo: true,
-      });
-    }
-
+    console.error('[Sales] Create error:', error);
     return res.status(500).json({ message: 'Failed to create sale' });
   }
 };

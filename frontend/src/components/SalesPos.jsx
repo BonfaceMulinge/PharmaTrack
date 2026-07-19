@@ -39,7 +39,24 @@ function SalesPos({ onSaleComplete, onBackToDashboard }) {
   };
 
   useEffect(() => {
-    loadMedicines();
+    let cancelled = false;
+    const load = async () => {
+      try {
+        setIsLoading(true);
+        const response = await fetch(`${API_URL}/medicines`);
+        if (cancelled) return;
+        if (!response.ok) throw new Error('Failed to load medicines');
+        const data = await response.json();
+        setMedicines(data.filter((medicine) => getCurrentStock(medicine) > 0));
+      } catch (err) {
+        console.error(err);
+        setError('Unable to load medicines right now.');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
   }, []);
 
   const categories = ['ALL', ...new Set(medicines.map((medicine) => medicine.category || 'Other'))];
@@ -109,7 +126,7 @@ function SalesPos({ onSaleComplete, onBackToDashboard }) {
       discount: 0,
       tax: 0,
       paymentMethod,
-      receiptNumber: receiptNumber || `RCPT-${Date.now()}`,
+      receiptNumber: receiptNumber || `RCPT-${crypto.randomUUID().slice(0, 8)}`,
       items: cart.map((item) => ({
         medicineId: item.medicineId,
         quantity: item.quantity,

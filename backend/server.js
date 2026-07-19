@@ -29,12 +29,23 @@ app.use('/api/sales', saleRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/notifications', notificationRoutes);
 
-app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', message: 'PharmaTrack backend is running' });
+app.get('/health', async (_req, res) => {
+  try {
+    const prisma = require('./src/utils/prisma');
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ status: 'ok', db: 'connected', timestamp: new Date().toISOString() });
+  } catch (error) {
+    res.status(503).json({ status: 'error', db: 'disconnected', message: error.message });
+  }
 });
 
-app.get('/api/admin-only', authenticate, authorize('ADMIN'), (_req, res) => {
-  res.json({ message: 'Admin access granted' });
+app.use((_req, res) => {
+  res.status(404).json({ message: 'Not found' });
+});
+
+app.use((err, _req, res, _next) => {
+  console.error('[Server] Unhandled error:', err);
+  res.status(500).json({ message: 'Internal server error' });
 });
 
 app.listen(PORT, () => {
