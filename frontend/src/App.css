@@ -465,6 +465,7 @@ body {
 .stat-icon-blue { background: rgba(59, 130, 246, 0.16); color: #3b82f6; }
 .stat-icon-purple { background: rgba(168, 85, 247, 0.16); color: #a855f7; }
 .stat-icon-amber { background: rgba(245, 158, 11, 0.16); color: #f59e0b; }
+.stat-icon-red { background: rgba(248, 113, 113, 0.16); color: #f87171; }
 
 .stat-card p {
   margin: 0;
@@ -1366,4 +1367,46 @@ code {
   border-radius: 4px;
   font-size: 0.85rem;
   font-family: monospace;
+}
+
+/* ===== SUPER ADMIN RESPONSIVE ===== */
+@media (max-width: 640px) {
+  .super-admin-card {
+    padding: 28px 20px;
+  }
+
+  .super-admin-card .auth-brand h1 {
+    font-size: 1.3rem;
+  }
+
+  .super-admin-card h2 {
+    font-size: 1.2rem;
+  }
+
+  .super-admin-link {
+    display: block;
+    text-align: center;
+    margin-top: 12px;
+  }
+
+  .stats-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .super-admin-card {
+    padding: 24px 16px;
+    border-radius: 16px;
+  }
+
+  .sa-badge {
+    width: 48px;
+    height: 48px;
+    font-size: 1.1rem;
+  }
 }

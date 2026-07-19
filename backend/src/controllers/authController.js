@@ -123,16 +123,21 @@ const refresh = async (req, res) => {
 const changePassword = async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
-    const user = req.user;
+    const userId = req.user.id;
 
-    const isValid = await bcrypt.compare(currentPassword, user.passwordHash);
+    const fullUser = await prisma.user.findUnique({ where: { id: userId } });
+    if (!fullUser) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const isValid = await bcrypt.compare(currentPassword, fullUser.passwordHash);
     if (!isValid) {
       return res.status(400).json({ message: 'Current password is incorrect' });
     }
 
     const passwordHash = await bcrypt.hash(newPassword, 10);
     await prisma.user.update({
-      where: { id: user.id },
+      where: { id: userId },
       data: { passwordHash, mustChangePassword: false },
     });
 

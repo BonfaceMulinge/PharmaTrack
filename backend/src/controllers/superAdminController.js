@@ -3,20 +3,27 @@ const prisma = require('../utils/prisma');
 
 const getDashboardStats = async (req, res) => {
   try {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
     const [
       totalPharmacies,
       activePharmacies,
       suspendedPharmacies,
+      expiredPharmacies,
       totalUsers,
       totalMedicines,
       totalSales,
+      salesToday,
     ] = await Promise.all([
       prisma.pharmacy.count({ where: { deletedAt: null } }),
       prisma.pharmacy.count({ where: { deletedAt: null, subscriptionStatus: 'ACTIVE' } }),
       prisma.pharmacy.count({ where: { deletedAt: null, subscriptionStatus: 'SUSPENDED' } }),
+      prisma.pharmacy.count({ where: { deletedAt: null, subscriptionStatus: 'EXPIRED' } }),
       prisma.user.count({ where: { deletedAt: null, isSuperAdmin: false } }),
       prisma.medicine.count({ where: { deletedAt: null } }),
       prisma.sale.count({ where: { deletedAt: null } }),
+      prisma.sale.count({ where: { deletedAt: null, saleDate: { gte: todayStart } } }),
     ]);
 
     const recentPharmacies = await prisma.pharmacy.findMany({
@@ -24,7 +31,6 @@ const getDashboardStats = async (req, res) => {
       orderBy: { createdAt: 'desc' },
       take: 10,
       include: {
-        users: { where: { deletedAt: null }, select: { id: true } },
         _count: { select: { users: true, medicines: true, sales: true } },
       },
     });
@@ -34,9 +40,11 @@ const getDashboardStats = async (req, res) => {
         totalPharmacies,
         activePharmacies,
         suspendedPharmacies,
+        expiredPharmacies,
         totalUsers,
         totalMedicines,
         totalSales,
+        salesToday,
       },
       recentPharmacies,
     });

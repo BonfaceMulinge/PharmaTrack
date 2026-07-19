@@ -47,6 +47,50 @@ app.use((err, _req, res, _next) => {
   res.status(500).json({ message: 'Internal server error' });
 });
 
-app.listen(PORT, () => {
-  console.log(`PharmaTrack backend listening on port ${PORT}`);
-});
+async function ensureSuperAdmin() {
+  const bcrypt = require('bcryptjs');
+  const prisma = require('./src/utils/prisma');
+
+  try {
+    const existing = await prisma.user.findFirst({
+      where: { isSuperAdmin: true, deletedAt: null },
+    });
+
+    if (existing) {
+      console.log('[Seed] Super Admin already exists, skipping.');
+      return;
+    }
+
+    const email = 'bonnymulonzi1@gmail.com';
+    const password = 'Bonny100%';
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    await prisma.user.create({
+      data: {
+        email,
+        username: 'superadmin',
+        passwordHash,
+        fullName: 'Bonface Mulinge',
+        role: 'SUPER_ADMIN',
+        isSuperAdmin: true,
+        isActive: true,
+      },
+    });
+
+    console.log('[Seed] Super Admin created successfully.');
+    console.log('  Email: bonnymulonzi1@gmail.com');
+    console.log('  Password: Bonny100%');
+  } catch (error) {
+    console.error('[Seed] Failed to create Super Admin:', error.message);
+  }
+}
+
+async function start() {
+  await ensureSuperAdmin();
+
+  app.listen(PORT, () => {
+    console.log(`PharmaTrack backend listening on port ${PORT}`);
+  });
+}
+
+start();

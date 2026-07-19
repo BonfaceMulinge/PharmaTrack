@@ -171,6 +171,7 @@ enum UserRole {
   ADMIN
   PHARMACIST
   CASHIER
+  SUPER_ADMIN
 }
 
 enum PaymentMethod {

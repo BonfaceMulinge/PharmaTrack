@@ -4,15 +4,17 @@ const bcrypt = require('bcryptjs');
 const prisma = new PrismaClient();
 
 async function main() {
-  const email = 'admin@pharmatrack.com';
-  const password = 'SuperAdmin123!';
+  const existing = await prisma.user.findFirst({
+    where: { isSuperAdmin: true, deletedAt: null },
+  });
 
-  const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
     console.log('Super Admin already exists, skipping seed.');
     return;
   }
 
+  const email = 'bonnymulonzi1@gmail.com';
+  const password = 'Bonny100%';
   const passwordHash = await bcrypt.hash(password, 10);
 
   await prisma.user.create({
@@ -20,8 +22,8 @@ async function main() {
       email,
       username: 'superadmin',
       passwordHash,
-      fullName: 'Super Admin',
-      role: 'ADMIN',
+      fullName: 'Bonface Mulinge',
+      role: 'SUPER_ADMIN',
       isSuperAdmin: true,
       isActive: true,
     },
