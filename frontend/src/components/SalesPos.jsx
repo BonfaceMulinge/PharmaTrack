@@ -8,7 +8,7 @@ const formatCurrency = (value) =>
     maximumFractionDigits: 0,
   }).format(value ?? 0);
 
-const getCurrentStock = (medicine) => Number(medicine.currentStock ?? medicine.quantity ?? 0);
+const getCurrentStock = (medicine) => Number(medicine.quantity ?? 0);
 
 function SalesPos({ onSaleComplete, onBackToDashboard }) {
   const [medicines, setMedicines] = useState([]);
@@ -42,13 +42,11 @@ function SalesPos({ onSaleComplete, onBackToDashboard }) {
     loadMedicines();
   }, []);
 
-  const categories = ['ALL', ...new Set(medicines.map((medicine) => medicine.category?.name || 'Uncategorized'))];
+  const categories = ['ALL', ...new Set(medicines.map((medicine) => medicine.category || 'Other'))];
 
   const filteredMedicines = medicines.filter((medicine) => {
-    const matchesSearch = [medicine.name, medicine.genericName, medicine.barcode]
-      .filter(Boolean)
-      .some((value) => value.toLowerCase().includes(searchTerm.toLowerCase()));
-    const matchesCategory = selectedCategory === 'ALL' || medicine.category?.name === selectedCategory;
+    const matchesSearch = medicine.name.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCategory = selectedCategory === 'ALL' || medicine.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
 
@@ -182,7 +180,7 @@ function SalesPos({ onSaleComplete, onBackToDashboard }) {
           <div className="pos-filters">
             <input
               className="search-input"
-              placeholder="Search by name, barcode, or generic name"
+              placeholder="Search by medicine name"
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
             />
@@ -202,21 +200,14 @@ function SalesPos({ onSaleComplete, onBackToDashboard }) {
               {filteredMedicines.map((medicine) => (
                 <article key={medicine.id} className="medicine-card">
                   <div className="medicine-card-media">
-                    {medicine.imageUrl ? (
-                      <img src={medicine.imageUrl} alt={medicine.name} />
-                    ) : (
-                      <span>{medicine.name?.charAt(0) || 'M'}</span>
-                    )}
+                    <span>{medicine.name?.charAt(0) || 'M'}</span>
                   </div>
                   <div className="medicine-card-body">
                     <div className="pill-row">
-                      <span className="pill">{medicine.category?.name || 'Uncategorized'}</span>
+                      <span className="pill">{medicine.category || 'Other'}</span>
                       <span className="pill">Stock {getCurrentStock(medicine)}</span>
                     </div>
                     <h4>{medicine.name}</h4>
-                    <p>{medicine.genericName || 'Generic name unavailable'}</p>
-                    <p className="muted">Batch: {medicine.batchNumber || '—'}</p>
-                    <p className="muted">Expiry: {medicine.expiryDate ? new Date(medicine.expiryDate).toLocaleDateString('en-KE') : '—'}</p>
                     <div className="price-row">
                       <strong>{formatCurrency(Number(medicine.sellingPrice))}</strong>
                       <button className="primary-btn" type="button" onClick={() => addToCart(medicine)}>

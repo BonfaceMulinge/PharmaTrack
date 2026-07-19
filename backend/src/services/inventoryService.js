@@ -1,19 +1,17 @@
 const prisma = require('../utils/prisma');
 
-const defaultLowStockThreshold = 10;
-
 const createLowStockNotification = async (tx, userId, medicine) => {
-  if (!medicine) return null;
-
-  const threshold = Number(medicine.reorderLevel ?? defaultLowStockThreshold);
-  if (medicine.quantity > threshold) return null;
+  if (!medicine || medicine.quantity > 10) return null;
 
   return tx.notification.create({
     data: {
       userId,
       type: 'LOW_STOCK',
-      title: 'Low stock alert',
-      message: `${medicine.name} is at ${medicine.quantity} units and needs restocking.`,
+      title: medicine.quantity <= 0 ? 'Out of stock alert' : 'Low stock alert',
+      message:
+        medicine.quantity <= 0
+          ? `${medicine.name} is out of stock and cannot be sold until restocked.`
+          : `${medicine.name} is at ${medicine.quantity} units and needs restocking.`,
     },
   });
 };
@@ -30,7 +28,7 @@ const applyStockDelta = async ({
   notes,
   costPrice,
   sellingPrice,
-  reorderLevel,
+  category,
 }) => {
   const normalizedName = String(medicineName || '').trim();
   const stockDelta = Number(delta || 0);
@@ -74,7 +72,7 @@ const applyStockDelta = async ({
         costPrice: Number(costPrice || 0),
         sellingPrice: Number(sellingPrice || 0),
         quantity: Math.max(nextStock, 0),
-        reorderLevel: Number(reorderLevel || defaultLowStockThreshold),
+        category: category || 'Other',
       },
     });
   } else {
@@ -84,7 +82,7 @@ const applyStockDelta = async ({
         quantity: nextStock,
         ...(costPrice !== undefined ? { costPrice: Number(costPrice) } : {}),
         ...(sellingPrice !== undefined ? { sellingPrice: Number(sellingPrice) } : {}),
-        ...(reorderLevel !== undefined ? { reorderLevel: Number(reorderLevel) } : {}),
+        ...(category !== undefined ? { category } : {}),
       },
     });
   }

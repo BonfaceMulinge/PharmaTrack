@@ -51,6 +51,7 @@ const createPurchase = async (req, res) => {
               costPrice: parseFloat(item.costPrice || 0),
               sellingPrice: parseFloat(item.sellingPrice || 0),
               quantity: Number(item.quantity || 0),
+              category: item.category || 'Other',
             },
           });
         } else {

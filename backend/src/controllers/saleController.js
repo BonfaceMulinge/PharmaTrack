@@ -97,7 +97,7 @@ const createSale = async (req, res) => {
           },
         });
 
-        if (remainingQuantity <= (medicine.reorderLevel || 10)) {
+        if (remainingQuantity <= 10) {
           await tx.notification.create({
             data: {
               userId: req.user.id,

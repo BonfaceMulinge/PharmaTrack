@@ -34,7 +34,6 @@ model Category {
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
   deletedAt   DateTime?
-  medicines   Medicine[]
 }
 
 model Supplier {
@@ -68,28 +67,18 @@ model Customer {
 }
 
 model Medicine {
-  id                   String          @id @default(uuid())
-  name                 String
-  genericName          String?
-  brandName            String?
-  barcode              String?         @unique
-  batchNumber          String?
-  categoryId           String?
-  manufacturer         String?
-  costPrice            Decimal
-  sellingPrice         Decimal
-  quantity             Int             @default(0)
-  reorderLevel         Int             @default(10)
-  expiryDate           DateTime?
-  prescriptionRequired Boolean         @default(false)
-  imageUrl             String?
-  createdAt            DateTime        @default(now())
-  updatedAt            DateTime        @updatedAt
-  deletedAt            DateTime?
-  category             Category?       @relation(fields: [categoryId], references: [id])
-  purchaseItems        PurchaseItem[]
-  saleItems            SaleItem[]
-  stockMovements       StockMovement[]
+  id             String          @id @default(uuid())
+  name           String
+  quantity       Int             @default(0)
+  costPrice      Decimal
+  sellingPrice   Decimal
+  category       String
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  deletedAt      DateTime?
+  purchaseItems  PurchaseItem[]
+  saleItems      SaleItem[]
+  stockMovements StockMovement[]
 }
 
 model Purchase {
