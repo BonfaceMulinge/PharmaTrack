@@ -9,9 +9,9 @@ const upload = multer({ storage: multer.memoryStorage() });
 router.get('/sample-excel', downloadSampleExcel);
 router.get('/stock-movements', authenticate, authorize('ADMIN', 'PHARMACIST', 'CASHIER'), getStockMovements);
 router.get('/', authenticate, authorize('ADMIN', 'PHARMACIST', 'CASHIER'), getMedicines);
-router.post('/', authenticate, authorize('ADMIN'), createMedicine);
-router.post('/import', authenticate, authorize('ADMIN'), upload.single('file'), importMedicines);
-router.put('/:id', authenticate, authorize('ADMIN'), updateMedicine);
-router.delete('/:id', authenticate, authorize('ADMIN'), deleteMedicine);
+router.post('/', authenticate, authorize('ADMIN', 'PHARMACIST'), createMedicine);
+router.post('/import', authenticate, authorize('ADMIN', 'PHARMACIST'), upload.single('file'), importMedicines);
+router.put('/:id', authenticate, authorize('ADMIN', 'PHARMACIST'), updateMedicine);
+router.delete('/:id', authenticate, authorize('ADMIN', 'PHARMACIST'), deleteMedicine);
 
 module.exports = router;
