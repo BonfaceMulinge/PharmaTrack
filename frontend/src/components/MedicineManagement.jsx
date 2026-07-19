@@ -168,11 +168,11 @@ function MedicineManagement() {
         body: formData,
       });
       const payload = await response.json();
-      if (!response.ok) throw new Error(payload.message || 'Import failed');
+      if (!response.ok && !payload.summary) throw new Error(payload.message || 'Import failed');
 
-      const summary = payload.summary;
+      const summary = payload.summary || {};
       setImportMessage(
-        `Total Rows: ${summary.totalRows}\nNew Medicines: ${summary.newMedicines}\nUpdated Medicines: ${summary.updatedMedicines}\nFailed Rows: ${summary.failedRows}`
+        `Total Rows: ${summary.totalRows || 0}\nCreated: ${summary.created || 0}\nUpdated: ${summary.updated || 0}\nTotal Units Added: ${summary.totalUnitsAdded || 0}\nFailed Rows: ${summary.failedRows || 0}`
       );
       setImportErrors(summary.errors || []);
       setImportFile(null);
@@ -332,7 +332,7 @@ function MedicineManagement() {
             <strong>Errors:</strong>
             <ul>
               {importErrors.map((err, idx) => (
-                <li key={idx}>Row {err.row}: {err.field ? `${err.field} — ` : ''}{err.message}</li>
+                <li key={idx}>Row {err.row}: {err.message}</li>
               ))}
             </ul>
           </div>

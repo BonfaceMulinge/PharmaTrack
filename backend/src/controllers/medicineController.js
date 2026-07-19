@@ -220,6 +220,21 @@ const createMedicine = async (req, res) => {
   }
 };
 
+const normalizeHeaders = (row) => {
+  const normalized = {};
+  Object.keys(row).forEach((key) => {
+    normalized[key.trim()] = row[key];
+  });
+  return normalized;
+};
+
+const resolveColumn = (row, ...candidates) => {
+  for (const candidate of candidates) {
+    if (row[candidate] !== undefined && row[candidate] !== '') return row[candidate];
+  }
+  return undefined;
+};
+
 const importMedicines = async (req, res) => {
   const aggregatedRows = new Map();
   const rowErrors = [];
@@ -231,54 +246,67 @@ const importMedicines = async (req, res) => {
 
     const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
     const sheetName = workbook.SheetNames[0];
-    const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' });
+    const rawRows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' });
+
+    const rows = rawRows.map(normalizeHeaders);
+
+    console.log(`[Import] Parsed ${rows.length} rows from "${sheetName}"`);
+    if (rows.length > 0) {
+      console.log('[Import] Column headers detected:', Object.keys(rows[0]));
+    }
 
     const summary = {
       totalRows: rows.length,
-      newMedicines: 0,
-      updatedMedicines: 0,
+      created: 0,
+      updated: 0,
+      totalUnitsAdded: 0,
       failedRows: 0,
       errors: [],
     };
 
-    rows.forEach((row, index) => {
+    rows.forEach((rawRow, index) => {
       const rowNumber = index + 2;
-      const name = String(row['Medicine Name'] || '').trim();
-      const stockRaw = row['Available Stock'];
-      const costPriceRaw = row['Cost Price'];
-      const sellingPriceRaw = row['Selling Price'];
-      const categoryRaw = row['Category'];
+      const row = normalizeHeaders(rawRow);
 
-      if (!name) {
-        rowErrors.push({ row: rowNumber, field: 'Medicine Name', message: 'Medicine Name is empty' });
+      const name = resolveColumn(row, 'Medicine Name', 'MedicineName', 'medicineName', 'name', 'Name');
+      const stockRaw = resolveColumn(row, 'Available Stock', 'AvailableStock', 'Stock', 'stock', 'Quantity', 'quantity');
+      const costPriceRaw = resolveColumn(row, 'Cost Price', 'CostPrice', 'costPrice');
+      const sellingPriceRaw = resolveColumn(row, 'Selling Price', 'SellingPrice', 'sellingPrice');
+      const categoryRaw = resolveColumn(row, 'Category', 'category');
+
+      console.log(`[Import] Row ${rowNumber}:`, JSON.stringify({ name, stockRaw, costPriceRaw, sellingPriceRaw, categoryRaw }));
+
+      if (!name || !String(name).trim()) {
+        rowErrors.push({ row: rowNumber, message: 'Medicine Name is required' });
         return;
       }
 
       const stock = toNumber(stockRaw, NaN);
       if (!Number.isFinite(stock) || stock < 0 || !Number.isInteger(stock)) {
-        rowErrors.push({ row: rowNumber, field: 'Available Stock', message: `Available Stock must be a valid number (got: "${stockRaw}")` });
+        rowErrors.push({ row: rowNumber, message: `Available Stock must be a whole number (received: "${stockRaw}")` });
         return;
       }
 
       const costPrice = toNumber(costPriceRaw, NaN);
       if (!Number.isFinite(costPrice) || costPrice < 0) {
-        rowErrors.push({ row: rowNumber, field: 'Cost Price', message: `Cost Price must be a valid number (got: "${costPriceRaw}")` });
+        rowErrors.push({ row: rowNumber, message: `Cost Price must be a valid number (received: "${costPriceRaw}")` });
         return;
       }
 
       const sellingPrice = toNumber(sellingPriceRaw, NaN);
       if (!Number.isFinite(sellingPrice) || sellingPrice < 0) {
-        rowErrors.push({ row: rowNumber, field: 'Selling Price', message: `Selling Price must be a valid number (got: "${sellingPriceRaw}")` });
+        rowErrors.push({ row: rowNumber, message: `Selling Price must be a valid number (received: "${sellingPriceRaw}")` });
         return;
       }
 
       const category = String(categoryRaw || '').trim();
       if (!category) {
-        rowErrors.push({ row: rowNumber, field: 'Category', message: 'Category is empty' });
+        rowErrors.push({ row: rowNumber, message: 'Category is required' });
         return;
       }
 
-      const key = name.toLowerCase();
+      const nameStr = String(name).trim();
+      const key = nameStr.toLowerCase();
       if (aggregatedRows.has(key)) {
         const existing = aggregatedRows.get(key);
         existing.stock += Math.trunc(stock);
@@ -287,7 +315,7 @@ const importMedicines = async (req, res) => {
         existing.category = validateCategory(category);
       } else {
         aggregatedRows.set(key, {
-          name,
+          name: nameStr,
           stock: Math.trunc(stock),
           costPrice,
           sellingPrice,
@@ -297,6 +325,8 @@ const importMedicines = async (req, res) => {
       }
     });
 
+    console.log(`[Import] Validation complete: ${aggregatedRows.size} valid, ${rowErrors.length} failed`);
+
     if (rowErrors.length > 0) {
       summary.failedRows = rowErrors.length;
       summary.errors = rowErrors;
@@ -305,7 +335,7 @@ const importMedicines = async (req, res) => {
     if (aggregatedRows.size === 0) {
       return res.status(400).json({
         message: 'No valid rows to import',
-        summary: { ...summary, failedRows: rowErrors.length },
+        summary,
       });
     }
 
@@ -332,14 +362,15 @@ const importMedicines = async (req, res) => {
                 category: item.category,
               },
             });
-            summary.newMedicines += 1;
+            summary.created += 1;
+            summary.totalUnitsAdded += item.stock;
             await createStockMovement(tx, {
               medicine,
               previousStock: 0,
               quantity: item.stock,
               type: 'ADJUSTMENT',
               referenceType: 'Import',
-              notes: 'Imported — new medicine created',
+              notes: 'Imported - new medicine created',
               userId: req.user?.id,
             });
           } else {
@@ -354,14 +385,15 @@ const importMedicines = async (req, res) => {
                 category: item.category,
               },
             });
-            summary.updatedMedicines += 1;
+            summary.updated += 1;
+            summary.totalUnitsAdded += item.stock;
             await createStockMovement(tx, {
               medicine,
               previousStock,
               quantity: item.stock,
               type: 'ADJUSTMENT',
               referenceType: 'Import',
-              notes: 'Imported — stock increased',
+              notes: 'Imported - stock increased',
               userId: req.user?.id,
             });
           }
@@ -372,16 +404,21 @@ const importMedicines = async (req, res) => {
       }
     });
 
+    console.log('[Import] Result:', JSON.stringify(summary));
+
     res.json({
       message: 'Import completed',
       summary,
     });
   } catch (error) {
+    console.error('[Import] Fatal error:', error);
+
     if (isDemoMode()) {
       const summary = {
         totalRows: aggregatedRows.size + rowErrors.length,
-        newMedicines: 0,
-        updatedMedicines: 0,
+        created: 0,
+        updated: 0,
+        totalUnitsAdded: 0,
         failedRows: rowErrors.length,
         errors: rowErrors,
       };
@@ -392,7 +429,7 @@ const importMedicines = async (req, res) => {
           existing.costPrice = item.costPrice;
           existing.sellingPrice = item.sellingPrice;
           existing.category = item.category;
-          summary.updatedMedicines += 1;
+          summary.updated += 1;
         } else {
           demoMedicines.push({
             id: `demo-${demoMedicines.length + 1}`,
@@ -403,8 +440,9 @@ const importMedicines = async (req, res) => {
             category: item.category,
             createdAt: new Date(),
           });
-          summary.newMedicines += 1;
+          summary.created += 1;
         }
+        summary.totalUnitsAdded += item.stock;
       }
       return res.json({ message: 'Import completed', summary });
     }
