@@ -442,18 +442,50 @@ const downloadSampleExcel = async (_req, res) => {
   try {
     const sampleData = [
       ['Medicine Name', 'Available Stock', 'Cost Price', 'Selling Price', 'Category'],
-      ['Paracetamol 500mg', 100, 5, 10, 'Tablets'],
-      ['Amoxicillin 250mg', 50, 12, 20, 'Capsules'],
-      ['Ibuprofen 400mg', 75, 8, 15, 'Tablets'],
+      ['Paracetamol 500mg', 100, 5, 8, 'Tablets'],
+      ['Amoxicillin 500mg', 60, 18, 25, 'Capsules'],
+      ['Metronidazole 400mg', 45, 12, 18, 'Tablets'],
+      ['Ibuprofen 400mg', 80, 7, 12, 'Tablets'],
+      ['Vitamin C 500mg', 120, 6, 10, 'Tablets'],
+      ['Omeprazole 20mg', 50, 20, 30, 'Capsules'],
+      ['Cetirizine 10mg', 70, 4, 8, 'Tablets'],
+      ['Azithromycin 500mg', 40, 30, 45, 'Tablets'],
+      ['Cough Syrup', 35, 90, 120, 'Syrup'],
+      ['Diclofenac Gel', 25, 110, 150, 'Cream'],
+    ];
+
+    const instructionsData = [
+      ['PharmaTrack Medicine Import Instructions'],
+      [''],
+      ['Column Rules:'],
+      ['1. Do not rename the column headers.'],
+      ['2. Only these five columns are accepted: Medicine Name, Available Stock, Cost Price, Selling Price, Category.'],
+      ['3. Available Stock must be a whole number (non-negative integer).'],
+      ['4. Cost Price and Selling Price must be numeric values (non-negative).'],
+      ['5. Category must be one of: Tablets, Capsules, Syrup, Injection, Cream, Drops.'],
+      [''],
+      ['Import Behavior:'],
+      ['6. If a medicine already exists, uploading it again will:'],
+      ['   - Increase Available Stock.'],
+      ['   - Update Cost Price.'],
+      ['   - Update Selling Price.'],
+      ['   - Update Category.'],
+      ['7. Blank rows are ignored.'],
+      ['8. Duplicate medicines within the same file are merged before import.'],
     ];
 
     const workbook = XLSX.utils.book_new();
-    const worksheet = XLSX.utils.aoa_to_sheet(sampleData);
-    worksheet['!cols'] = [{ wch: 25 }, { wch: 18 }, { wch: 12 }, { wch: 15 }, { wch: 15 }];
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Medicines');
+
+    const medicinesSheet = XLSX.utils.aoa_to_sheet(sampleData);
+    medicinesSheet['!cols'] = [{ wch: 25 }, { wch: 18 }, { wch: 12 }, { wch: 15 }, { wch: 15 }];
+    XLSX.utils.book_append_sheet(workbook, medicinesSheet, 'Medicines');
+
+    const instructionsSheet = XLSX.utils.aoa_to_sheet(instructionsData);
+    instructionsSheet['!cols'] = [{ wch: 80 }];
+    XLSX.utils.book_append_sheet(workbook, instructionsSheet, 'Instructions');
 
     const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
-    res.setHeader('Content-Disposition', 'attachment; filename=medicines-sample.xlsx');
+    res.setHeader('Content-Disposition', 'attachment; filename="PharmaTrack_Medicine_Import_Template.xlsx"');
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.send(buffer);
   } catch (error) {

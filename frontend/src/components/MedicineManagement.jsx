@@ -190,8 +190,22 @@ function MedicineManagement() {
     }
   };
 
-  const handleDownloadSample = () => {
-    window.open(`${API_URL}/medicines/sample-excel`, '_blank');
+  const handleDownloadSample = async () => {
+    try {
+      const response = await authFetch(`${API_URL}/medicines/sample-excel`);
+      if (!response.ok) throw new Error('Failed to download sample');
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'PharmaTrack_Medicine_Import_Template.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Download sample error:', error);
+    }
   };
 
   const filteredMedicines = medicines.filter((medicine) =>
