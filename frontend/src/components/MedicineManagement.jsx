@@ -154,6 +154,8 @@ function MedicineManagement() {
       return;
     }
 
+    setImportMessage('');
+    setImportErrors([]);
     const formData = new FormData();
     formData.append('file', importFile);
 
@@ -163,12 +165,21 @@ function MedicineManagement() {
         body: formData,
       });
       const payload = await response.json();
-      if (!response.ok && !payload.summary) throw new Error(payload.message || 'Import failed');
-
       const summary = payload.summary || {};
-      setImportMessage(
-        `Total Rows: ${summary.totalRows || 0}\nCreated: ${summary.created || 0}\nUpdated: ${summary.updated || 0}\nTotal Units Added: ${summary.totalUnitsAdded || 0}\nFailed Rows: ${summary.failedRows || 0}`
-      );
+
+      if (!response.ok && summary.totalRows === undefined) {
+        throw new Error(payload.message || 'Import failed');
+      }
+
+      const parts = [];
+      parts.push(`Import completed.`);
+      parts.push(`Rows Processed: ${summary.totalRows || 0}`);
+      parts.push(`New Medicines: ${summary.created || 0}`);
+      parts.push(`Updated Medicines: ${summary.updated || 0}`);
+      parts.push(`Total Units Added: ${summary.totalUnitsAdded || 0}`);
+      parts.push(`Failed Rows: ${summary.failedRows || 0}`);
+
+      setImportMessage(parts.join('\n'));
       setImportErrors(summary.errors || []);
       setImportFile(null);
       fetchMedicines();

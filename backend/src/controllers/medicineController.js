@@ -157,8 +157,15 @@ const normalizeHeaders = (row) => {
 };
 
 const resolveColumn = (row, ...candidates) => {
+  const lowerKeys = {};
+  Object.keys(row).forEach((key) => {
+    lowerKeys[key.toLowerCase().trim()] = key;
+  });
   for (const candidate of candidates) {
-    if (row[candidate] !== undefined && row[candidate] !== '') return row[candidate];
+    const realKey = lowerKeys[candidate.toLowerCase().trim()];
+    if (realKey !== undefined && row[realKey] !== undefined && row[realKey] !== '') {
+      return row[realKey];
+    }
   }
   return undefined;
 };
@@ -170,6 +177,10 @@ const importMedicines = async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ message: 'Please upload a file' });
+    }
+
+    if (!req.pharmacyId) {
+      return res.status(400).json({ message: 'No pharmacy associated with this account. Please contact support.' });
     }
 
     const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
@@ -188,13 +199,12 @@ const importMedicines = async (req, res) => {
 
     rows.forEach((rawRow, index) => {
       const rowNumber = index + 2;
-      const row = normalizeHeaders(rawRow);
 
-      const name = resolveColumn(row, 'Medicine Name', 'MedicineName', 'medicineName', 'name', 'Name');
-      const stockRaw = resolveColumn(row, 'Available Stock', 'AvailableStock', 'Stock', 'stock', 'Quantity', 'quantity');
-      const costPriceRaw = resolveColumn(row, 'Cost Price', 'CostPrice', 'costPrice');
-      const sellingPriceRaw = resolveColumn(row, 'Selling Price', 'SellingPrice', 'sellingPrice');
-      const categoryRaw = resolveColumn(row, 'Category', 'category');
+      const name = resolveColumn(rawRow, 'Medicine Name', 'MedicineName', 'medicineName', 'name', 'Name');
+      const stockRaw = resolveColumn(rawRow, 'Available Stock', 'AvailableStock', 'Stock', 'stock', 'Quantity', 'quantity');
+      const costPriceRaw = resolveColumn(rawRow, 'Cost Price', 'CostPrice', 'costPrice');
+      const sellingPriceRaw = resolveColumn(rawRow, 'Selling Price', 'SellingPrice', 'sellingPrice');
+      const categoryRaw = resolveColumn(rawRow, 'Category', 'category');
 
       if (!name || !String(name).trim()) {
         rowErrors.push({ row: rowNumber, message: 'Medicine Name is required' });
@@ -320,19 +330,23 @@ const importMedicines = async (req, res) => {
       }
     }
 
-    await prisma.notification.create({
-      data: {
-        pharmacyId: req.pharmacyId,
-        type: 'IMPORT_COMPLETED',
-        title: 'Import Completed',
-        message: `Import finished: ${summary.created} created, ${summary.updated} updated, ${summary.totalUnitsAdded} units added.`,
-      },
-    });
+    try {
+      await prisma.notification.create({
+        data: {
+          pharmacyId: req.pharmacyId,
+          type: 'IMPORT_COMPLETED',
+          title: 'Import Completed',
+          message: `Import finished: ${summary.created} created, ${summary.updated} updated, ${summary.totalUnitsAdded} units added.`,
+        },
+      });
+    } catch (notifErr) {
+      console.error('[Import] Failed to create notification:', notifErr.message);
+    }
 
     res.json({ message: 'Import completed', summary });
   } catch (error) {
     console.error('[Import] Fatal error:', error);
-    res.status(500).json({ message: 'Failed to import medicines' });
+    res.status(500).json({ message: 'Failed to import medicines', summary: { totalRows: 0, created: 0, updated: 0, totalUnitsAdded: 0, failedRows: 0, errors: [{ row: 0, message: error.message }] } });
   }
 };
 
