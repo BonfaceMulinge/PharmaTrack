@@ -134,6 +134,7 @@ function App() {
   })
   const [authView, setAuthView] = useState('login')
   const [activeSection, setActiveSection] = useState('home')
+  const [renderedSections, setRenderedSections] = useState(() => new Set(['home']))
   const [view, setView] = useState('dashboard')
   const [menuOpen, setMenuOpen] = useState(false)
 
@@ -155,6 +156,12 @@ function App() {
   const handleNavigate = useCallback((sectionId) => {
     setView('dashboard')
     setActiveSection(sectionId)
+    setRenderedSections((prev) => {
+      if (prev.has(sectionId)) return prev
+      const next = new Set(prev)
+      next.add(sectionId)
+      return next
+    })
     setMenuOpen(false)
     document.getElementById(sectionId)?.scrollIntoView({
       behavior: 'smooth',
@@ -190,12 +197,22 @@ function App() {
 
     const observer = new IntersectionObserver(
       (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            setRenderedSections((prev) => {
+              if (prev.has(entry.target.id)) return prev
+              const next = new Set(prev)
+              next.add(entry.target.id)
+              return next
+            })
+          }
+        })
         const visibleEntry = entries
           .filter((entry) => entry.isIntersecting)
           .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0]
         if (visibleEntry) setActiveSection(visibleEntry.target.id)
       },
-      { threshold: [0.1], rootMargin: '-10% 0px -60% 0px' }
+      { threshold: [0.05], rootMargin: '200px 0px' }
     )
 
     sections.forEach((section) => observer.observe(section))
@@ -278,23 +295,37 @@ function App() {
       </header>
 
       <main className="main-content">
-        <Suspense fallback={<PageLoader />}>
           <div className="page-section" id="home">
-            <HomePage onNavigate={handleNavigate} />
+            {renderedSections.has('home') && (
+              <Suspense fallback={<PageLoader />}>
+                <HomePage onNavigate={handleNavigate} />
+              </Suspense>
+            )}
           </div>
 
           <div className="page-section" id="medicines">
-            <MedicineManagement />
+            {renderedSections.has('medicines') && (
+              <Suspense fallback={<PageLoader />}>
+                <MedicineManagement />
+              </Suspense>
+            )}
           </div>
 
           <div className="page-section" id="sales">
-            <SalesPos onSaleComplete={handleSaleComplete} onBackToDashboard={handleBackToDashboard} />
+            {renderedSections.has('sales') && (
+              <Suspense fallback={<PageLoader />}>
+                <SalesPos onSaleComplete={handleSaleComplete} onBackToDashboard={handleBackToDashboard} />
+              </Suspense>
+            )}
           </div>
 
           <div className="page-section" id="notifications">
-            <NotificationsForecasting />
+            {renderedSections.has('notifications') && (
+              <Suspense fallback={<PageLoader />}>
+                <NotificationsForecasting />
+              </Suspense>
+            )}
           </div>
-        </Suspense>
       </main>
     </div>
   )

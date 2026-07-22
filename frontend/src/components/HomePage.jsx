@@ -53,14 +53,15 @@ function HomePage({ onNavigate }) {
   });
   const [recentActivity, setRecentActivity] = useState([]);
   const [notifications, setNotifications] = useState([]);
-  const [loading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
     const loadData = async () => {
       const [analyticsRes, notifRes] = await Promise.all([
         authFetch(`${API_URL}/reports/analytics`),
         authFetch(`${API_URL}/notifications`),
       ]);
+      if (cancelled) return;
       if (analyticsRes.ok) {
         const a = await analyticsRes.json();
         setStats({
@@ -84,22 +85,13 @@ function HomePage({ onNavigate }) {
 
     const unsubSale = subscribe(Events.SALE_COMPLETED, loadData);
     const unsubMed = subscribe(Events.MEDICINES_CHANGED, loadData);
-    return () => { unsubSale(); unsubMed(); };
+    return () => { cancelled = true; unsubSale(); unsubMed(); };
   }, []);
 
   const handleNewSale = useCallback(() => onNavigate('sales'), [onNavigate]);
   const handleManageMedicines = useCallback(() => onNavigate('medicines'), [onNavigate]);
   const handleViewSales = useCallback(() => onNavigate('sales'), [onNavigate]);
   const handleViewNotifications = useCallback(() => onNavigate('notifications'), [onNavigate]);
-
-  if (loading) {
-    return (
-      <div className="home-loading">
-        <div className="spinner" />
-        <p>Loading dashboard...</p>
-      </div>
-    );
-  }
 
   return (
     <div className="home-page">
