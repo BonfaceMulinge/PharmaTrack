@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, useCallback, memo } from 'react';
 import { authFetch, API_URL, getUser } from '../api';
 import { useDebounce } from '../hooks/useDebounce';
-import { subscribe, emit, Events } from '../store';
+import { subscribe, Events } from '../store';
 
 const formatCurrency = (value) =>
   new Intl.NumberFormat('en-KE', {
@@ -208,6 +208,17 @@ function SalesPos({ onSaleComplete, onBackToDashboard }) {
 
     const finalReceipt = receiptNumber || `RCPT-${crypto.randomUUID().slice(0, 8)}`;
 
+    const snapshot = cart.map((item) => ({
+      medicineId: item.medicineId,
+      soldQuantity: item.quantity,
+    }));
+
+    setMedicines((prev) => prev.map((med) => {
+      const sold = snapshot.find((s) => s.medicineId === med.id);
+      if (!sold) return med;
+      return { ...med, quantity: Math.max(0, (med.quantity || 0) - sold.soldQuantity) };
+    }));
+
     const payload = {
       totalAmount: total,
       discount: 0,
@@ -245,17 +256,19 @@ function SalesPos({ onSaleComplete, onBackToDashboard }) {
       setReceipt(receiptData);
       setSuccess(result.message || 'Sale completed successfully');
       if (onSaleComplete) onSaleComplete();
-      emit(Events.SALE_COMPLETED);
-      emit(Events.MEDICINES_CHANGED);
       setCart([]);
       setReceiptNumber('');
-      loadMedicines();
     } catch (err) {
+      setMedicines((prev) => prev.map((med) => {
+        const sold = snapshot.find((s) => s.medicineId === med.id);
+        if (!sold) return med;
+        return { ...med, quantity: (med.quantity || 0) + sold.soldQuantity };
+      }));
       setError(err.message || 'Unable to complete the sale.');
     } finally {
       setIsSubmitting(false);
     }
-  }, [cart, total, paymentMethod, receiptNumber, onSaleComplete, loadMedicines]);
+  }, [cart, total, paymentMethod, receiptNumber, onSaleComplete]);
 
   return (
     <div className="pos-shell">

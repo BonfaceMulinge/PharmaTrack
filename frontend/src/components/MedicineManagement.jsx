@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, useCallback, memo } from 'react';
 import { authFetch, API_URL } from '../api';
 import { useDebounce } from '../hooks/useDebounce';
-import { emit, Events } from '../store';
+import { subscribe, emit, Events } from '../store';
 
 const CATEGORIES = ['Tablets', 'Capsules', 'Syrup', 'Injection', 'Cream', 'Drops', 'Other'];
 
@@ -94,7 +94,9 @@ function MedicineManagement() {
       }
     };
     load();
-    return () => { cancelled = true; };
+
+    const unsub = subscribe(Events.MEDICINES_CHANGED, load);
+    return () => { cancelled = true; unsub(); };
   }, []);
 
   useEffect(() => {
@@ -121,31 +123,45 @@ function MedicineManagement() {
     setIsSubmitting(true);
     setStatus({ type: '', message: '' });
 
+    const tempId = `temp-${Date.now()}`;
+    const optimisticMedicine = {
+      id: tempId,
+      name: form.name,
+      quantity: Number(form.initialStock || 0),
+      costPrice: Number(form.costPrice),
+      sellingPrice: Number(form.sellingPrice),
+      category: form.category,
+      inventoryValue: Number(form.initialStock || 0) * Number(form.costPrice),
+    };
+
+    setMedicines((prev) => [...prev, optimisticMedicine]);
+    setForm(initialForm);
+    setShowForm(false);
+
     try {
       const response = await authFetch(`${API_URL}/medicines`, {
         method: 'POST',
         body: JSON.stringify({
-          name: form.name,
-          initialStock: form.initialStock || '0',
-          costPrice: form.costPrice,
-          sellingPrice: form.sellingPrice,
-          category: form.category,
+          name: optimisticMedicine.name,
+          initialStock: String(optimisticMedicine.quantity),
+          costPrice: String(optimisticMedicine.costPrice),
+          sellingPrice: String(optimisticMedicine.sellingPrice),
+          category: optimisticMedicine.category,
         }),
       });
 
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.message || 'Failed');
-      setForm(initialForm);
-      setShowForm(false);
+      setMedicines((prev) => prev.map((m) => m.id === tempId ? { ...m, ...payload } : m));
       setStatus({ type: 'success', message: payload.message || 'Medicine saved successfully.' });
-      fetchMedicines();
       emit(Events.MEDICINES_CHANGED);
     } catch (error) {
+      setMedicines((prev) => prev.filter((m) => m.id !== tempId));
       setStatus({ type: 'error', message: error.message || 'Failed to save medicine.' });
     } finally {
       setIsSubmitting(false);
     }
-  }, [form, fetchMedicines]);
+  }, [form]);
 
   const handleEdit = useCallback((medicine) => {
     setEditingMedicine(medicine);
@@ -162,6 +178,19 @@ function MedicineManagement() {
     setIsSubmitting(true);
     setStatus({ type: '', message: '' });
 
+    const original = medicines.find((m) => m.id === editingMedicine.id);
+    const optimisticValues = {
+      name: editFormState.name,
+      costPrice: Number(editFormState.costPrice),
+      sellingPrice: Number(editFormState.sellingPrice),
+      category: editFormState.category,
+    };
+
+    setMedicines((prev) => prev.map((m) =>
+      m.id === editingMedicine.id ? { ...m, ...optimisticValues } : m
+    ));
+    setEditingMedicine(null);
+
     try {
       const response = await authFetch(`${API_URL}/medicines/${editingMedicine.id}`, {
         method: 'PUT',
@@ -170,31 +199,39 @@ function MedicineManagement() {
 
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.message || 'Failed');
-      setEditingMedicine(null);
+      setMedicines((prev) => prev.map((m) =>
+        m.id === editingMedicine.id ? { ...m, ...payload } : m
+      ));
       setStatus({ type: 'success', message: 'Medicine updated successfully.' });
-      fetchMedicines();
       emit(Events.MEDICINES_CHANGED);
     } catch (error) {
+      if (original) {
+        setMedicines((prev) => prev.map((m) =>
+          m.id === original.id ? original : m
+        ));
+      }
       setStatus({ type: 'error', message: error.message || 'Failed to update medicine.' });
     } finally {
       setIsSubmitting(false);
     }
-  }, [editingMedicine, editFormState, fetchMedicines]);
+  }, [editingMedicine, editFormState, medicines]);
 
   const handleDelete = useCallback(async (medicine) => {
     if (!window.confirm(`Are you sure you want to delete "${medicine.name}"?`)) return;
+
+    setMedicines((prev) => prev.filter((m) => m.id !== medicine.id));
 
     try {
       const response = await authFetch(`${API_URL}/medicines/${medicine.id}`, { method: 'DELETE' });
       if (!response.ok) throw new Error('Failed');
       setStatus({ type: 'success', message: 'Medicine deleted successfully.' });
-      fetchMedicines();
       setMovementsLoaded(false);
       emit(Events.MEDICINES_CHANGED);
     } catch (error) {
+      setMedicines((prev) => [...prev, medicine].sort((a, b) => a.name.localeCompare(b.name)));
       setStatus({ type: 'error', message: error.message || 'Failed to delete medicine.' });
     }
-  }, [fetchMedicines]);
+  }, []);
 
   const handleImport = useCallback(async (e) => {
     e.preventDefault();
