@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useCallback, memo } from 'react';
 import { authFetch, API_URL, getUser } from '../api';
 import { useDebounce } from '../hooks/useDebounce';
+import { subscribe, emit, Events } from '../store';
 
 const formatCurrency = (value) =>
   new Intl.NumberFormat('en-KE', {
@@ -82,7 +83,7 @@ function SalesPos({ onSaleComplete, onBackToDashboard }) {
   const [receiptNumber, setReceiptNumber] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -104,24 +105,21 @@ function SalesPos({ onSaleComplete, onBackToDashboard }) {
 
   useEffect(() => {
     let cancelled = false;
-    const load = async () => {
+    const init = async () => {
       try {
-        setIsLoading(true);
         const response = await authFetch(`${API_URL}/medicines`);
-        if (cancelled) return;
-        if (!response.ok) throw new Error('Failed to load medicines');
+        if (cancelled || !response.ok) return;
         const data = await response.json();
         setMedicines(data.filter((medicine) => getCurrentStock(medicine) > 0));
       } catch (err) {
         console.error(err);
         if (!cancelled) setError('Unable to load medicines right now.');
-      } finally {
-        if (!cancelled) setIsLoading(false);
       }
     };
-    load();
-    return () => { cancelled = true; };
-  }, []);
+    init();
+    const unsub = subscribe(Events.MEDICINES_CHANGED, loadMedicines);
+    return () => { cancelled = true; unsub(); };
+  }, [loadMedicines]);
 
   const categories = useMemo(() =>
     ['ALL', ...new Set(medicines.map((medicine) => medicine.category || 'Other'))],
@@ -247,6 +245,8 @@ function SalesPos({ onSaleComplete, onBackToDashboard }) {
       setReceipt(receiptData);
       setSuccess(result.message || 'Sale completed successfully');
       if (onSaleComplete) onSaleComplete();
+      emit(Events.SALE_COMPLETED);
+      emit(Events.MEDICINES_CHANGED);
       setCart([]);
       setReceiptNumber('');
       loadMedicines();

@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo, useCallback, memo } from 'react';
 import { authFetch, API_URL } from '../api';
+import { subscribe, Events } from '../store';
 
 const NotificationItem = memo(function NotificationItem({ notification, onMarkRead }) {
   return (
@@ -37,17 +38,12 @@ function NotificationsForecasting() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    let cancelled = false;
     const loadData = async () => {
       try {
-        setLoading(true);
         const [notifRes, medRes] = await Promise.all([
           authFetch(`${API_URL}/notifications`),
           authFetch(`${API_URL}/medicines`),
         ]);
-
-        if (cancelled) return;
-
         if (notifRes.ok) setNotifications(await notifRes.json());
         if (medRes.ok) {
           const data = await medRes.json();
@@ -56,11 +52,14 @@ function NotificationsForecasting() {
       } catch (error) {
         console.error('[Notifications] Load error:', error);
       } finally {
-        if (!cancelled) setLoading(false);
+        setLoading(false);
       }
     };
     loadData();
-    return () => { cancelled = true; };
+
+    const unsubSale = subscribe(Events.SALE_COMPLETED, loadData);
+    const unsubMed = subscribe(Events.MEDICINES_CHANGED, loadData);
+    return () => { unsubSale(); unsubMed(); };
   }, []);
 
   const handleMarkAsRead = useCallback(async (id) => {

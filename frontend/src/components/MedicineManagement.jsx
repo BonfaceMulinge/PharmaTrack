@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useCallback, memo } from 'react';
 import { authFetch, API_URL } from '../api';
 import { useDebounce } from '../hooks/useDebounce';
+import { emit, Events } from '../store';
 
 const CATEGORIES = ['Tablets', 'Capsules', 'Syrup', 'Injection', 'Cream', 'Drops', 'Other'];
 
@@ -138,6 +139,7 @@ function MedicineManagement() {
       setShowForm(false);
       setStatus({ type: 'success', message: payload.message || 'Medicine saved successfully.' });
       fetchMedicines();
+      emit(Events.MEDICINES_CHANGED);
     } catch (error) {
       setStatus({ type: 'error', message: error.message || 'Failed to save medicine.' });
     } finally {
@@ -171,6 +173,7 @@ function MedicineManagement() {
       setEditingMedicine(null);
       setStatus({ type: 'success', message: 'Medicine updated successfully.' });
       fetchMedicines();
+      emit(Events.MEDICINES_CHANGED);
     } catch (error) {
       setStatus({ type: 'error', message: error.message || 'Failed to update medicine.' });
     } finally {
@@ -187,6 +190,7 @@ function MedicineManagement() {
       setStatus({ type: 'success', message: 'Medicine deleted successfully.' });
       fetchMedicines();
       setMovementsLoaded(false);
+      emit(Events.MEDICINES_CHANGED);
     } catch (error) {
       setStatus({ type: 'error', message: error.message || 'Failed to delete medicine.' });
     }
@@ -229,6 +233,7 @@ function MedicineManagement() {
       setImportFile(null);
       fetchMedicines();
       setMovementsLoaded(false);
+      emit(Events.MEDICINES_CHANGED);
     } catch (error) {
       setImportMessage(error.message || 'Import failed');
       setImportErrors([]);

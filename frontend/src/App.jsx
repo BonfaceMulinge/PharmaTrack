@@ -3,6 +3,7 @@ import LoginPage from './components/LoginPage'
 import SuperAdminLogin from './components/SuperAdminLogin'
 import SuperAdminDashboard from './components/SuperAdminDashboard'
 import { getAccessToken, getUser, clearTokens, setUser, API_URL } from './api'
+import { emit, Events } from './store'
 import './App.css'
 
 const HomePage = lazy(() => import('./components/HomePage'))
@@ -161,7 +162,10 @@ function App() {
     })
   }, [])
 
-  const handleSaleComplete = useCallback(() => {}, [])
+  const handleSaleComplete = useCallback(() => {
+    emit(Events.SALE_COMPLETED)
+    emit(Events.MEDICINES_CHANGED)
+  }, [])
 
   const handleToggleMenu = useCallback(() => {
     setMenuOpen((open) => !open)

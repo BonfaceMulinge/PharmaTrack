@@ -1,5 +1,6 @@
 import { useEffect, useState, memo, useCallback } from 'react';
 import { authFetch, API_URL } from '../api';
+import { Events, subscribe } from '../store';
 
 const formatCurrency = (value) =>
   new Intl.NumberFormat('en-KE', {
@@ -52,46 +53,38 @@ function HomePage({ onNavigate }) {
   });
   const [recentActivity, setRecentActivity] = useState([]);
   const [notifications, setNotifications] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading] = useState(true);
 
   useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      try {
-        const [analyticsRes, notifRes] = await Promise.all([
-          authFetch(`${API_URL}/reports/analytics`),
-          authFetch(`${API_URL}/notifications`),
-        ]);
-
-        if (cancelled) return;
-
-        if (analyticsRes.ok) {
-          const a = await analyticsRes.json();
-          setStats({
-            todayRevenue: a.todayRevenue ?? 0,
-            todayTransactions: a.todayTransactions ?? 0,
-            todayProfit: a.todayProfit ?? 0,
-            totalMedicines: a.medicines ?? 0,
-            totalUnitsInStock: a.totalUnitsInStock ?? 0,
-            lowStock: a.lowStock ?? 0,
-            outOfStock: a.outOfStock ?? 0,
-            inventoryValue: a.inventoryValue ?? 0,
-          });
-          setRecentActivity(a.recentActivity ?? []);
-        }
-
-        if (notifRes.ok) {
-          const data = await notifRes.json();
-          setNotifications(data.filter((n) => !n.isRead).slice(0, 5));
-        }
-      } catch (err) {
-        console.error('[Home] Load error:', err);
-      } finally {
-        if (!cancelled) setLoading(false);
+    const loadData = async () => {
+      const [analyticsRes, notifRes] = await Promise.all([
+        authFetch(`${API_URL}/reports/analytics`),
+        authFetch(`${API_URL}/notifications`),
+      ]);
+      if (analyticsRes.ok) {
+        const a = await analyticsRes.json();
+        setStats({
+          todayRevenue: a.todayRevenue ?? 0,
+          todayTransactions: a.todayTransactions ?? 0,
+          todayProfit: a.todayProfit ?? 0,
+          totalMedicines: a.medicines ?? 0,
+          totalUnitsInStock: a.totalUnitsInStock ?? 0,
+          lowStock: a.lowStock ?? 0,
+          outOfStock: a.outOfStock ?? 0,
+          inventoryValue: a.inventoryValue ?? 0,
+        });
+        setRecentActivity(a.recentActivity ?? []);
+      }
+      if (notifRes.ok) {
+        const data = await notifRes.json();
+        setNotifications(data.filter((n) => !n.isRead).slice(0, 5));
       }
     };
-    load();
-    return () => { cancelled = true; };
+    loadData();
+
+    const unsubSale = subscribe(Events.SALE_COMPLETED, loadData);
+    const unsubMed = subscribe(Events.MEDICINES_CHANGED, loadData);
+    return () => { unsubSale(); unsubMed(); };
   }, []);
 
   const handleNewSale = useCallback(() => onNavigate('sales'), [onNavigate]);
