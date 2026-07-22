@@ -1,7 +1,36 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, memo } from 'react';
 import { authFetch, API_URL } from '../api';
 
 const ROLES = ['ADMIN', 'PHARMACIST', 'CASHIER'];
+
+const UserRow = memo(function UserRow({ user, onEdit, onToggleActive, onResetPassword, onDelete }) {
+  return (
+    <tr key={user.id}>
+      <td>
+        <div>{user.fullName}</div>
+        <small className="muted">{user.username}</small>
+      </td>
+      <td>{user.email}</td>
+      <td><span className="pill">{user.role}</span></td>
+      <td>
+        <span className={`badge ${user.isActive ? 'badge-active' : 'badge-inactive'}`}>
+          {user.isActive ? 'Active' : 'Disabled'}
+        </span>
+      </td>
+      <td>{user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleDateString() : 'Never'}</td>
+      <td>
+        <button className="ghost-btn small-btn" type="button" onClick={() => onEdit(user)}>Edit</button>
+        <button className="ghost-btn small-btn" type="button" onClick={() => onToggleActive(user)}>
+          {user.isActive ? 'Disable' : 'Enable'}
+        </button>
+        <button className="ghost-btn small-btn" type="button" onClick={() => onResetPassword(user)}>
+          Reset Password
+        </button>
+        <button className="ghost-btn small-btn danger-btn" type="button" onClick={() => onDelete(user)}>Delete</button>
+      </td>
+    </tr>
+  );
+});
 
 function UserManagement() {
   const [users, setUsers] = useState([]);
@@ -30,7 +59,7 @@ function UserManagement() {
   const [resetPasswordUser, setResetPasswordUser] = useState(null);
   const [newPassword, setNewPassword] = useState('');
 
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     try {
       setLoading(true);
       const res = await authFetch(`${API_URL}/users`);
@@ -43,7 +72,7 @@ function UserManagement() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -58,14 +87,14 @@ function UserManagement() {
       } catch (err) {
         console.error('[Users] Load error:', err);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
     load();
     return () => { cancelled = true; };
   }, []);
 
-  const handleCreate = async (e) => {
+  const handleCreate = useCallback(async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
     setStatus({ type: '', message: '' });
@@ -87,9 +116,9 @@ function UserManagement() {
     } finally {
       setIsSubmitting(false);
     }
-  };
+  }, [form, fetchUsers]);
 
-  const handleEdit = (user) => {
+  const handleEdit = useCallback((user) => {
     setEditingUser(user);
     setEditForm({
       fullName: user.fullName,
@@ -97,9 +126,9 @@ function UserManagement() {
       phone: user.phone || '',
       role: user.role,
     });
-  };
+  }, []);
 
-  const handleEditSubmit = async (e) => {
+  const handleEditSubmit = useCallback(async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
     setStatus({ type: '', message: '' });
@@ -120,9 +149,9 @@ function UserManagement() {
     } finally {
       setIsSubmitting(false);
     }
-  };
+  }, [editingUser, editForm, fetchUsers]);
 
-  const handleToggleActive = async (user) => {
+  const handleToggleActive = useCallback(async (user) => {
     try {
       const res = await authFetch(`${API_URL}/users/${user.id}`, {
         method: 'PUT',
@@ -135,9 +164,9 @@ function UserManagement() {
     } catch {
       setStatus({ type: 'error', message: 'Failed to update user status' });
     }
-  };
+  }, [fetchUsers]);
 
-  const handleDelete = async (user) => {
+  const handleDelete = useCallback(async (user) => {
     if (!window.confirm(`Are you sure you want to delete "${user.fullName}"?`)) return;
 
     try {
@@ -150,9 +179,9 @@ function UserManagement() {
     } catch (err) {
       setStatus({ type: 'error', message: err.message });
     }
-  };
+  }, [fetchUsers]);
 
-  const handleResetPassword = async (e) => {
+  const handleResetPassword = useCallback(async (e) => {
     e.preventDefault();
     if (!resetPasswordUser) return;
 
@@ -170,7 +199,26 @@ function UserManagement() {
     } catch (err) {
       setStatus({ type: 'error', message: err.message });
     }
-  };
+  }, [resetPasswordUser, newPassword]);
+
+  const handleToggleForm = useCallback(() => {
+    setShowForm((prev) => !prev);
+    setEditingUser(null);
+  }, []);
+
+  const handleCancelEdit = useCallback(() => {
+    setEditingUser(null);
+  }, []);
+
+  const handleStartResetPassword = useCallback((user) => {
+    setResetPasswordUser(user);
+    setNewPassword('');
+  }, []);
+
+  const handleCancelResetPassword = useCallback(() => {
+    setResetPasswordUser(null);
+    setNewPassword('');
+  }, []);
 
   return (
     <div className="medicine-page">
@@ -179,7 +227,7 @@ function UserManagement() {
           <p className="eyebrow">Administration</p>
           <h2>User Management</h2>
         </div>
-        <button className="primary-btn" type="button" onClick={() => { setShowForm(!showForm); setEditingUser(null); }}>
+        <button className="primary-btn" type="button" onClick={handleToggleForm}>
           {showForm ? 'Close Form' : '+ Add User'}
         </button>
       </div>
@@ -212,7 +260,7 @@ function UserManagement() {
         <div className="panel">
           <div className="panel-header">
             <h3>Edit: {editingUser.fullName}</h3>
-            <button className="ghost-btn" type="button" onClick={() => setEditingUser(null)}>Cancel</button>
+            <button className="ghost-btn" type="button" onClick={handleCancelEdit}>Cancel</button>
           </div>
           <form className="medicine-form" onSubmit={handleEditSubmit}>
             <div className="form-grid">
@@ -234,7 +282,7 @@ function UserManagement() {
         <div className="panel">
           <div className="panel-header">
             <h3>Reset Password: {resetPasswordUser.fullName}</h3>
-            <button className="ghost-btn" type="button" onClick={() => { setResetPasswordUser(null); setNewPassword(''); }}>Cancel</button>
+            <button className="ghost-btn" type="button" onClick={handleCancelResetPassword}>Cancel</button>
           </div>
           <form className="medicine-form" onSubmit={handleResetPassword}>
             <div className="form-grid">
@@ -265,30 +313,14 @@ function UserManagement() {
             </thead>
             <tbody>
               {users.map((user) => (
-                <tr key={user.id}>
-                  <td>
-                    <div>{user.fullName}</div>
-                    <small className="muted">{user.username}</small>
-                  </td>
-                  <td>{user.email}</td>
-                  <td><span className="pill">{user.role}</span></td>
-                  <td>
-                    <span className={`badge ${user.isActive ? 'badge-active' : 'badge-inactive'}`}>
-                      {user.isActive ? 'Active' : 'Disabled'}
-                    </span>
-                  </td>
-                  <td>{user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleDateString() : 'Never'}</td>
-                  <td>
-                    <button className="ghost-btn small-btn" type="button" onClick={() => handleEdit(user)}>Edit</button>
-                    <button className="ghost-btn small-btn" type="button" onClick={() => handleToggleActive(user)}>
-                      {user.isActive ? 'Disable' : 'Enable'}
-                    </button>
-                    <button className="ghost-btn small-btn" type="button" onClick={() => { setResetPasswordUser(user); setNewPassword(''); }}>
-                      Reset Password
-                    </button>
-                    <button className="ghost-btn small-btn danger-btn" type="button" onClick={() => handleDelete(user)}>Delete</button>
-                  </td>
-                </tr>
+                <UserRow
+                  key={user.id}
+                  user={user}
+                  onEdit={handleEdit}
+                  onToggleActive={handleToggleActive}
+                  onResetPassword={handleStartResetPassword}
+                  onDelete={handleDelete}
+                />
               ))}
               {users.length === 0 && (
                 <tr><td colSpan="6" style={{ textAlign: 'center' }}>No users found</td></tr>
@@ -301,4 +333,4 @@ function UserManagement() {
   );
 }
 
-export default UserManagement;
+export default memo(UserManagement);

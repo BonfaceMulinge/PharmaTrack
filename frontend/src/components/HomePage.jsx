@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, memo, useCallback } from 'react';
 import { authFetch, API_URL } from '../api';
 
 const formatCurrency = (value) =>
@@ -18,6 +18,26 @@ const timeAgo = (dateString) => {
   const days = Math.floor(hours / 24);
   return `${days}d ago`;
 };
+
+const ActivityItem = memo(function ActivityItem({ item }) {
+  return (
+    <li key={item.id}>
+      <strong>{item.title}</strong>
+      <span>{item.detail}</span>
+      <small>{formatCurrency(item.amount)} &middot; {timeAgo(item.time)}</small>
+    </li>
+  );
+});
+
+const NotificationItem = memo(function NotificationItem({ n }) {
+  return (
+    <li key={n.id}>
+      <strong>{n.title}</strong>
+      <span>{n.message}</span>
+      <small>{timeAgo(n.createdAt)}</small>
+    </li>
+  );
+});
 
 function HomePage({ onNavigate }) {
   const [stats, setStats] = useState({
@@ -67,12 +87,17 @@ function HomePage({ onNavigate }) {
       } catch (err) {
         console.error('[Home] Load error:', err);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
     load();
     return () => { cancelled = true; };
   }, []);
+
+  const handleNewSale = useCallback(() => onNavigate('sales'), [onNavigate]);
+  const handleManageMedicines = useCallback(() => onNavigate('medicines'), [onNavigate]);
+  const handleViewSales = useCallback(() => onNavigate('sales'), [onNavigate]);
+  const handleViewNotifications = useCallback(() => onNavigate('notifications'), [onNavigate]);
 
   if (loading) {
     return (
@@ -92,10 +117,10 @@ function HomePage({ onNavigate }) {
             <h2>Welcome to PharmaTrack</h2>
             <p className="hero-desc">Manage your inventory, process sales, and track your pharmacy operations from one platform.</p>
             <div className="hero-actions">
-              <button className="primary-btn" type="button" onClick={() => onNavigate('sales')}>
+              <button className="primary-btn" type="button" onClick={handleNewSale}>
                 New Sale
               </button>
-              <button className="ghost-btn" type="button" onClick={() => onNavigate('medicines')}>
+              <button className="ghost-btn" type="button" onClick={handleManageMedicines}>
                 Manage Medicines
               </button>
             </div>
@@ -176,18 +201,14 @@ function HomePage({ onNavigate }) {
         <article className="panel">
           <div className="panel-header">
             <h3>Recent Activity</h3>
-            <button className="ghost-btn small-btn" type="button" onClick={() => onNavigate('sales')}>
+            <button className="ghost-btn small-btn" type="button" onClick={handleViewSales}>
               View Sales
             </button>
           </div>
           <ul className="activity-list">
             {recentActivity.length > 0 ? (
               recentActivity.map((item) => (
-                <li key={item.id}>
-                  <strong>{item.title}</strong>
-                  <span>{item.detail}</span>
-                  <small>{formatCurrency(item.amount)} &middot; {timeAgo(item.time)}</small>
-                </li>
+                <ActivityItem key={item.id} item={item} />
               ))
             ) : (
               <li className="empty-state">
@@ -202,17 +223,13 @@ function HomePage({ onNavigate }) {
         <article className="panel">
           <div className="panel-header">
             <h3>Recent Notifications</h3>
-            <button className="ghost-btn small-btn" type="button" onClick={() => onNavigate('notifications')}>
+            <button className="ghost-btn small-btn" type="button" onClick={handleViewNotifications}>
               View All
             </button>
           </div>
           <ul className="activity-list">
             {notifications.map((n) => (
-              <li key={n.id}>
-                <strong>{n.title}</strong>
-                <span>{n.message}</span>
-                <small>{timeAgo(n.createdAt)}</small>
-              </li>
+              <NotificationItem key={n.id} n={n} />
             ))}
           </ul>
         </article>
@@ -221,4 +238,4 @@ function HomePage({ onNavigate }) {
   );
 }
 
-export default HomePage;
+export default memo(HomePage);

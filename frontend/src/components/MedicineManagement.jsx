@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo, useCallback, memo } from 'react';
 import { authFetch, API_URL } from '../api';
+import { useDebounce } from '../hooks/useDebounce';
 
 const CATEGORIES = ['Tablets', 'Capsules', 'Syrup', 'Injection', 'Cream', 'Drops', 'Other'];
 
@@ -10,6 +11,43 @@ const initialForm = {
   sellingPrice: '',
   category: 'Tablets',
 };
+
+const formatCurrency = (value) =>
+  new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES', maximumFractionDigits: 0 }).format(value ?? 0);
+
+const MedicineRow = memo(function MedicineRow({ medicine, onEdit, onDelete }) {
+  return (
+    <tr>
+      <td>
+        <div>{medicine.name}</div>
+        {medicine.quantity > 0 && medicine.quantity <= 10 && <span className="badge low-stock">Low Stock</span>}
+        {medicine.quantity === 0 && <span className="badge out-stock">Out of Stock</span>}
+      </td>
+      <td>{medicine.quantity}</td>
+      <td>{formatCurrency(medicine.costPrice)}</td>
+      <td>{formatCurrency(medicine.sellingPrice)}</td>
+      <td>{medicine.category || 'Other'}</td>
+      <td>
+        <button className="ghost-btn small-btn" type="button" onClick={() => onEdit(medicine)}>Edit</button>
+        <button className="ghost-btn small-btn danger-btn" type="button" onClick={() => onDelete(medicine)}>Delete</button>
+      </td>
+    </tr>
+  );
+});
+
+const StockMovementRow = memo(function StockMovementRow({ movement }) {
+  return (
+    <tr>
+      <td>{movement.medicineName}</td>
+      <td>{new Date(movement.createdAt).toLocaleString()}</td>
+      <td>{movement.referenceType || movement.type}</td>
+      <td>{movement.type === 'SALE' ? '-' : '+'}{movement.quantity}</td>
+      <td>{movement.previousStock}</td>
+      <td>{movement.balanceAfter}</td>
+      <td>{movement.userName || 'System'}</td>
+    </tr>
+  );
+});
 
 function MedicineManagement() {
   const [medicines, setMedicines] = useState([]);
@@ -25,8 +63,11 @@ function MedicineManagement() {
   const [editFormState, setEditFormState] = useState({ name: '', costPrice: '', sellingPrice: '', category: 'Tablets' });
   const [showForm, setShowForm] = useState(false);
   const [activeTab, setActiveTab] = useState('inventory');
+  const [movementsLoaded, setMovementsLoaded] = useState(false);
 
-  const fetchMedicines = async () => {
+  const debouncedSearch = useDebounce(searchTerm, 200);
+
+  const fetchMedicines = useCallback(async () => {
     try {
       const response = await authFetch(`${API_URL}/medicines`);
       if (response.ok) {
@@ -36,31 +77,17 @@ function MedicineManagement() {
     } catch (error) {
       console.error(error);
     }
-  };
-
-  const fetchStockMovements = async () => {
-    try {
-      const response = await authFetch(`${API_URL}/medicines/stock-movements`);
-      if (response.ok) {
-        const data = await response.json();
-        setStockMovements(data);
-      }
-    } catch (error) {
-      console.error(error);
-    }
-  };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       try {
-        const [medsRes, movementsRes] = await Promise.all([
+        const [medsRes] = await Promise.all([
           authFetch(`${API_URL}/medicines`),
-          authFetch(`${API_URL}/medicines/stock-movements`),
         ]);
         if (cancelled) return;
         if (medsRes.ok) setMedicines(await medsRes.json());
-        if (movementsRes.ok) setStockMovements(await movementsRes.json());
       } catch (error) {
         console.error(error);
       }
@@ -69,7 +96,26 @@ function MedicineManagement() {
     return () => { cancelled = true; };
   }, []);
 
-  const handleSubmit = async (e) => {
+  useEffect(() => {
+    if (activeTab === 'history' && !movementsLoaded) {
+      let cancelled = false;
+      (async () => {
+        try {
+          const response = await authFetch(`${API_URL}/medicines/stock-movements`);
+          if (!cancelled && response.ok) {
+            const data = await response.json();
+            setStockMovements(data);
+            setMovementsLoaded(true);
+          }
+        } catch (error) {
+          console.error(error);
+        }
+      })();
+      return () => { cancelled = true; };
+    }
+  }, [activeTab, movementsLoaded]);
+
+  const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
     setStatus({ type: '', message: '' });
@@ -92,15 +138,14 @@ function MedicineManagement() {
       setShowForm(false);
       setStatus({ type: 'success', message: payload.message || 'Medicine saved successfully.' });
       fetchMedicines();
-      fetchStockMovements();
     } catch (error) {
       setStatus({ type: 'error', message: error.message || 'Failed to save medicine.' });
     } finally {
       setIsSubmitting(false);
     }
-  };
+  }, [form, fetchMedicines]);
 
-  const handleEdit = (medicine) => {
+  const handleEdit = useCallback((medicine) => {
     setEditingMedicine(medicine);
     setEditFormState({
       name: medicine.name,
@@ -108,9 +153,9 @@ function MedicineManagement() {
       sellingPrice: medicine.sellingPrice,
       category: medicine.category || 'Tablets',
     });
-  };
+  }, []);
 
-  const handleEditSubmit = async (e) => {
+  const handleEditSubmit = useCallback(async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
     setStatus({ type: '', message: '' });
@@ -131,9 +176,9 @@ function MedicineManagement() {
     } finally {
       setIsSubmitting(false);
     }
-  };
+  }, [editingMedicine, editFormState, fetchMedicines]);
 
-  const handleDelete = async (medicine) => {
+  const handleDelete = useCallback(async (medicine) => {
     if (!window.confirm(`Are you sure you want to delete "${medicine.name}"?`)) return;
 
     try {
@@ -141,13 +186,13 @@ function MedicineManagement() {
       if (!response.ok) throw new Error('Failed');
       setStatus({ type: 'success', message: 'Medicine deleted successfully.' });
       fetchMedicines();
-      fetchStockMovements();
+      setMovementsLoaded(false);
     } catch (error) {
       setStatus({ type: 'error', message: error.message || 'Failed to delete medicine.' });
     }
-  };
+  }, [fetchMedicines]);
 
-  const handleImport = async (e) => {
+  const handleImport = useCallback(async (e) => {
     e.preventDefault();
     if (!importFile) {
       setImportMessage('Please choose an Excel file first.');
@@ -183,14 +228,14 @@ function MedicineManagement() {
       setImportErrors(summary.errors || []);
       setImportFile(null);
       fetchMedicines();
-      fetchStockMovements();
+      setMovementsLoaded(false);
     } catch (error) {
       setImportMessage(error.message || 'Import failed');
       setImportErrors([]);
     }
-  };
+  }, [importFile, fetchMedicines]);
 
-  const handleDownloadSample = async () => {
+  const handleDownloadSample = useCallback(async () => {
     try {
       const response = await authFetch(`${API_URL}/medicines/sample-excel`);
       if (!response.ok) throw new Error('Failed to download sample');
@@ -206,17 +251,37 @@ function MedicineManagement() {
     } catch (error) {
       console.error('Download sample error:', error);
     }
-  };
+  }, []);
 
-  const filteredMedicines = medicines.filter((medicine) =>
-    medicine.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (medicine.category || '').toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredMedicines = useMemo(() =>
+    medicines.filter((medicine) => {
+      const term = debouncedSearch.toLowerCase();
+      return medicine.name.toLowerCase().includes(term) ||
+        (medicine.category || '').toLowerCase().includes(term);
+    }),
+    [medicines, debouncedSearch]
   );
 
-  const formatCurrency = (value) =>
-    new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES', maximumFractionDigits: 0 }).format(value ?? 0);
+  const inventorySummary = useMemo(() => {
+    const totalCount = medicines.length;
+    const totalUnits = medicines.reduce((sum, item) => sum + (item.quantity || 0), 0);
+    const totalValue = medicines.reduce((sum, m) => sum + (m.inventoryValue || 0), 0);
+    const lowStock = medicines.filter((item) => item.quantity > 0 && item.quantity <= 10).length;
+    return { totalCount, totalUnits, totalValue, lowStock };
+  }, [medicines]);
 
-  const totalInventoryValue = medicines.reduce((sum, m) => sum + (m.inventoryValue || 0), 0);
+  const handleSearchChange = useCallback((e) => {
+    setSearchTerm(e.target.value);
+  }, []);
+
+  const handleToggleForm = useCallback(() => {
+    setShowForm((prev) => !prev);
+    setEditingMedicine(null);
+  }, []);
+
+  const handleCancelEdit = useCallback(() => {
+    setEditingMedicine(null);
+  }, []);
 
   return (
     <div className="medicine-page">
@@ -226,7 +291,7 @@ function MedicineManagement() {
           <h2>Medicine Management</h2>
         </div>
         <div className="topbar-actions">
-          <button className="primary-btn" type="button" onClick={() => { setShowForm(!showForm); setEditingMedicine(null); }}>
+          <button className="primary-btn" type="button" onClick={handleToggleForm}>
             {showForm ? 'Close Form' : '+ Add Medicine'}
           </button>
         </div>
@@ -259,7 +324,7 @@ function MedicineManagement() {
         <div className="panel">
           <div className="panel-header">
             <h3>Edit: {editingMedicine.name}</h3>
-            <button className="ghost-btn" type="button" onClick={() => setEditingMedicine(null)}>Cancel</button>
+            <button className="ghost-btn" type="button" onClick={handleCancelEdit}>Cancel</button>
           </div>
           <form className="medicine-form" onSubmit={handleEditSubmit}>
             <div className="form-grid">
@@ -293,13 +358,13 @@ function MedicineManagement() {
         <div className="panel">
           <div className="panel-header">
             <h3>Medicine Inventory</h3>
-            <input className="search-input" placeholder="Search by name or category..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+            <input className="search-input" placeholder="Search by name or category..." value={searchTerm} onChange={handleSearchChange} />
           </div>
           <div className="inventory-summary">
-            <div><strong>{medicines.length}</strong><span>Total Medicines</span></div>
-            <div><strong>{medicines.reduce((sum, item) => sum + (item.quantity || 0), 0)}</strong><span>Total Units</span></div>
-            <div><strong>{formatCurrency(totalInventoryValue)}</strong><span>Inventory Value</span></div>
-            <div><strong>{medicines.filter((item) => item.quantity > 0 && item.quantity <= 10).length}</strong><span>Low Stock</span></div>
+            <div><strong>{inventorySummary.totalCount}</strong><span>Total Medicines</span></div>
+            <div><strong>{inventorySummary.totalUnits}</strong><span>Total Units</span></div>
+            <div><strong>{formatCurrency(inventorySummary.totalValue)}</strong><span>Inventory Value</span></div>
+            <div><strong>{inventorySummary.lowStock}</strong><span>Low Stock</span></div>
           </div>
           <div className="table-responsive">
             <table className="data-table">
@@ -315,21 +380,7 @@ function MedicineManagement() {
               </thead>
               <tbody>
                 {filteredMedicines.map((medicine) => (
-                  <tr key={medicine.id}>
-                    <td>
-                      <div>{medicine.name}</div>
-                      {medicine.quantity > 0 && medicine.quantity <= 10 && <span className="badge low-stock">Low Stock</span>}
-                      {medicine.quantity === 0 && <span className="badge out-stock">Out of Stock</span>}
-                    </td>
-                    <td>{medicine.quantity}</td>
-                    <td>{formatCurrency(medicine.costPrice)}</td>
-                    <td>{formatCurrency(medicine.sellingPrice)}</td>
-                    <td>{medicine.category || 'Other'}</td>
-                    <td>
-                      <button className="ghost-btn small-btn" type="button" onClick={() => handleEdit(medicine)}>Edit</button>
-                      <button className="ghost-btn small-btn danger-btn" type="button" onClick={() => handleDelete(medicine)}>Delete</button>
-                    </td>
-                  </tr>
+                  <MedicineRow key={medicine.id} medicine={medicine} onEdit={handleEdit} onDelete={handleDelete} />
                 ))}
                 {filteredMedicines.length === 0 && (
                   <tr><td colSpan="6" className="empty-table">No medicines found</td></tr>
@@ -388,15 +439,7 @@ function MedicineManagement() {
               </thead>
               <tbody>
                 {stockMovements.map((movement) => (
-                  <tr key={movement.id}>
-                    <td>{movement.medicineName}</td>
-                    <td>{new Date(movement.createdAt).toLocaleString()}</td>
-                    <td>{movement.referenceType || movement.type}</td>
-                    <td>{movement.type === 'SALE' ? '-' : '+'}{movement.quantity}</td>
-                    <td>{movement.previousStock}</td>
-                    <td>{movement.balanceAfter}</td>
-                    <td>{movement.userName || 'System'}</td>
-                  </tr>
+                  <StockMovementRow key={movement.id} movement={movement} />
                 ))}
                 {stockMovements.length === 0 && (
                   <tr><td colSpan="7" className="empty-table">No stock movements recorded</td></tr>
@@ -410,4 +453,4 @@ function MedicineManagement() {
   );
 }
 
-export default MedicineManagement;
+export default memo(MedicineManagement);

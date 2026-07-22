@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback, memo } from 'react';
 import { API_URL, setTokens, setUser } from '../api';
 
 function SuperAdminLogin({ onLogin }) {
@@ -7,7 +7,7 @@ function SuperAdminLogin({ onLogin }) {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
     setError('');
     setIsLoading(true);
@@ -37,7 +37,7 @@ function SuperAdminLogin({ onLogin }) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [email, password, onLogin]);
 
   return (
     <div className="auth-page">
@@ -93,4 +93,4 @@ function SuperAdminLogin({ onLogin }) {
   );
 }
 
-export default SuperAdminLogin;
+export default memo(SuperAdminLogin);

@@ -1,5 +1,35 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo, useCallback, memo } from 'react';
 import { authFetch, API_URL } from '../api';
+
+const NotificationItem = memo(function NotificationItem({ notification, onMarkRead }) {
+  return (
+    <li key={notification.id} className={notification.isRead ? '' : 'unread-notification'}>
+      <div className="notif-header">
+        <strong>{notification.title}</strong>
+        {!notification.isRead && (
+          <button className="ghost-btn small-btn" type="button" onClick={() => onMarkRead(notification.id)}>
+            Mark Read
+          </button>
+        )}
+      </div>
+      <span>{notification.message}</span>
+      <small>{notification.type} &middot; {new Date(notification.createdAt).toLocaleString()}</small>
+    </li>
+  );
+});
+
+const LowStockItem = memo(function LowStockItem({ med }) {
+  return (
+    <li key={med.id}>
+      <strong>{med.name}</strong>
+      <span>
+        {med.quantity === 0
+          ? 'Out of stock'
+          : `${med.quantity} unit${med.quantity === 1 ? '' : 's'} remaining`}
+      </span>
+    </li>
+  );
+});
 
 function NotificationsForecasting() {
   const [notifications, setNotifications] = useState([]);
@@ -26,32 +56,35 @@ function NotificationsForecasting() {
       } catch (error) {
         console.error('[Notifications] Load error:', error);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
     loadData();
     return () => { cancelled = true; };
   }, []);
 
-  const handleMarkAsRead = async (id) => {
+  const handleMarkAsRead = useCallback(async (id) => {
     try {
       await authFetch(`${API_URL}/notifications/${id}/read`, { method: 'PATCH' });
       setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, isRead: true } : n));
     } catch (err) {
       console.error(err);
     }
-  };
+  }, []);
 
-  const handleMarkAllAsRead = async () => {
+  const handleMarkAllAsRead = useCallback(async () => {
     try {
       await authFetch(`${API_URL}/notifications/read-all`, { method: 'PATCH' });
       setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
     } catch (err) {
       console.error(err);
     }
-  };
+  }, []);
 
-  const unreadCount = notifications.filter((n) => !n.isRead).length;
+  const unreadCount = useMemo(() =>
+    notifications.filter((n) => !n.isRead).length,
+    [notifications]
+  );
 
   return (
     <div className="medicine-page">
@@ -80,18 +113,7 @@ function NotificationsForecasting() {
               <li className="empty-state">No notifications yet.</li>
             ) : (
               notifications.map((notification) => (
-                <li key={notification.id} className={notification.isRead ? '' : 'unread-notification'}>
-                  <div className="notif-header">
-                    <strong>{notification.title}</strong>
-                    {!notification.isRead && (
-                      <button className="ghost-btn small-btn" type="button" onClick={() => handleMarkAsRead(notification.id)}>
-                        Mark Read
-                      </button>
-                    )}
-                  </div>
-                  <span>{notification.message}</span>
-                  <small>{notification.type} &middot; {new Date(notification.createdAt).toLocaleString()}</small>
-                </li>
+                <NotificationItem key={notification.id} notification={notification} onMarkRead={handleMarkAsRead} />
               ))
             )}
           </ul>
@@ -106,14 +128,7 @@ function NotificationsForecasting() {
           ) : (
             <ul className="activity-list">
               {lowStockMedicines.map((med) => (
-                <li key={med.id}>
-                  <strong>{med.name}</strong>
-                  <span>
-                    {med.quantity === 0
-                      ? 'Out of stock'
-                      : `${med.quantity} unit${med.quantity === 1 ? '' : 's'} remaining`}
-                  </span>
-                </li>
+                <LowStockItem key={med.id} med={med} />
               ))}
             </ul>
           )}
@@ -123,4 +138,4 @@ function NotificationsForecasting() {
   );
 }
 
-export default NotificationsForecasting;
+export default memo(NotificationsForecasting);

@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, memo } from 'react';
 import { API_URL } from '../api';
+import { useDebounce } from '../hooks/useDebounce';
 
 function SuperAdminPharmacyManagement() {
   const [pharmacies, setPharmacies] = useState([]);
@@ -14,10 +15,12 @@ function SuperAdminPharmacyManagement() {
   const [message, setMessage] = useState({ type: '', text: '' });
   const [renewMonths, setRenewMonths] = useState({});
 
-  const fetchPharmacies = async () => {
+  const debouncedSearch = useDebounce(search, 300);
+
+  const fetchPharmacies = useCallback(async () => {
     try {
       const params = new URLSearchParams();
-      if (search) params.set('search', search);
+      if (debouncedSearch) params.set('search', debouncedSearch);
       if (filter !== 'ALL') params.set('status', filter);
       const res = await fetch(`${API_URL}/super-admin/pharmacies?${params}`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('pharmatrack_token')}` },
@@ -30,14 +33,14 @@ function SuperAdminPharmacyManagement() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [debouncedSearch, filter]);
 
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       try {
         const params = new URLSearchParams();
-        if (search) params.set('search', search);
+        if (debouncedSearch) params.set('search', debouncedSearch);
         if (filter !== 'ALL') params.set('status', filter);
         const res = await fetch(`${API_URL}/super-admin/pharmacies?${params}`, {
           headers: { Authorization: `Bearer ${localStorage.getItem('pharmatrack_token')}` },
@@ -53,9 +56,9 @@ function SuperAdminPharmacyManagement() {
     };
     load();
     return () => { cancelled = true; };
-  }, [search, filter]);
+  }, [debouncedSearch, filter]);
 
-  const handleCreate = async (e) => {
+  const handleCreate = useCallback(async (e) => {
     e.preventDefault();
     setMessage({ type: '', text: '' });
     setCreateResult(null);
@@ -78,9 +81,9 @@ function SuperAdminPharmacyManagement() {
     } catch (err) {
       setMessage({ type: 'error', text: err.message });
     }
-  };
+  }, [createForm, fetchPharmacies]);
 
-  const handleSuspend = async (id) => {
+  const handleSuspend = useCallback(async (id) => {
     try {
       const res = await fetch(`${API_URL}/super-admin/pharmacies/${id}/suspend`, {
         method: 'POST',
@@ -92,9 +95,9 @@ function SuperAdminPharmacyManagement() {
     } catch {
       setMessage({ type: 'error', text: 'Failed to suspend pharmacy' });
     }
-  };
+  }, [fetchPharmacies]);
 
-  const handleActivate = async (id) => {
+  const handleActivate = useCallback(async (id) => {
     try {
       const res = await fetch(`${API_URL}/super-admin/pharmacies/${id}/activate`, {
         method: 'POST',
@@ -106,9 +109,9 @@ function SuperAdminPharmacyManagement() {
     } catch {
       setMessage({ type: 'error', text: 'Failed to activate pharmacy' });
     }
-  };
+  }, [fetchPharmacies]);
 
-  const handleDelete = async (id, name) => {
+  const handleDelete = useCallback(async (id, name) => {
     if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
     try {
       const res = await fetch(`${API_URL}/super-admin/pharmacies/${id}`, {
@@ -121,9 +124,9 @@ function SuperAdminPharmacyManagement() {
     } catch {
       setMessage({ type: 'error', text: 'Failed to delete pharmacy' });
     }
-  };
+  }, [fetchPharmacies]);
 
-  const handleRenew = async (id) => {
+  const handleRenew = useCallback(async (id) => {
     const months = parseInt(renewMonths[id] || '1', 10);
     try {
       const res = await fetch(`${API_URL}/super-admin/pharmacies/${id}/renew`, {
@@ -141,14 +144,26 @@ function SuperAdminPharmacyManagement() {
     } catch {
       setMessage({ type: 'error', text: 'Failed to renew subscription' });
     }
-  };
+  }, [renewMonths, fetchPharmacies]);
+
+  const handleSearchChange = useCallback((e) => {
+    setSearch(e.target.value);
+  }, []);
+
+  const handleFilterChange = useCallback((e) => {
+    setFilter(e.target.value);
+  }, []);
+
+  const handleToggleCreate = useCallback(() => {
+    setShowCreate((prev) => !prev);
+  }, []);
 
   return (
     <>
       <div className="topbar">
         <h1>Pharmacies</h1>
         <div className="topbar-actions">
-          <button className="primary-btn" onClick={() => setShowCreate(!showCreate)}>
+          <button className="primary-btn" onClick={handleToggleCreate}>
             {showCreate ? 'Cancel' : '+ Create Pharmacy'}
           </button>
         </div>
@@ -244,9 +259,9 @@ function SuperAdminPharmacyManagement() {
               type="text"
               placeholder="Search pharmacies..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={handleSearchChange}
             />
-            <select value={filter} onChange={(e) => setFilter(e.target.value)}>
+            <select value={filter} onChange={handleFilterChange}>
               <option value="ALL">All Status</option>
               <option value="ACTIVE">Active</option>
               <option value="SUSPENDED">Suspended</option>
@@ -319,4 +334,4 @@ function SuperAdminPharmacyManagement() {
   );
 }
 
-export default SuperAdminPharmacyManagement;
+export default memo(SuperAdminPharmacyManagement);

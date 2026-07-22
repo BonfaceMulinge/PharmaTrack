@@ -25,6 +25,9 @@ model Pharmacy {
   sales                Sale[]
   stockMovements       StockMovement[]
   notifications        Notification[]
+
+  @@index([deletedAt])
+  @@index([subscriptionStatus])
 }
 
 model User {
@@ -51,6 +54,11 @@ model User {
   auditLogs          AuditLog[]
   sales              Sale[]
   stockMovements     StockMovement[]
+
+  @@index([pharmacyId])
+  @@index([pharmacyId, deletedAt])
+  @@index([deletedAt])
+  @@index([isActive])
 }
 
 model Medicine {
@@ -67,6 +75,12 @@ model Medicine {
   pharmacy       Pharmacy        @relation(fields: [pharmacyId], references: [id])
   saleItems      SaleItem[]
   stockMovements StockMovement[]
+
+  @@index([pharmacyId])
+  @@index([pharmacyId, deletedAt])
+  @@index([pharmacyId, name])
+  @@index([pharmacyId, category])
+  @@index([deletedAt])
 }
 
 model Sale {
@@ -88,6 +102,12 @@ model Sale {
   user          User          @relation(fields: [userId], references: [id])
   items         SaleItem[]
   payments      Payment[]
+
+  @@index([pharmacyId])
+  @@index([pharmacyId, deletedAt])
+  @@index([pharmacyId, saleDate])
+  @@index([pharmacyId, createdAt])
+  @@index([deletedAt])
 }
 
 model SaleItem {
@@ -103,6 +123,10 @@ model SaleItem {
   deletedAt   DateTime?
   medicine    Medicine  @relation(fields: [medicineId], references: [id])
   sale        Sale      @relation(fields: [saleId], references: [id])
+
+  @@index([saleId])
+  @@index([medicineId])
+  @@index([deletedAt])
 }
 
 model Payment {
@@ -136,6 +160,12 @@ model StockMovement {
   pharmacy      Pharmacy          @relation(fields: [pharmacyId], references: [id])
   medicine      Medicine          @relation(fields: [medicineId], references: [id])
   user          User?             @relation(fields: [userId], references: [id])
+
+  @@index([pharmacyId])
+  @@index([pharmacyId, deletedAt])
+  @@index([pharmacyId, medicineId])
+  @@index([pharmacyId, createdAt])
+  @@index([deletedAt])
 }
 
 model AuditLog {
@@ -151,6 +181,9 @@ model AuditLog {
   updatedAt  DateTime  @updatedAt
   deletedAt  DateTime?
   user       User?     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([deletedAt])
 }
 
 model Notification {
@@ -165,6 +198,11 @@ model Notification {
   updatedAt  DateTime         @updatedAt
   deletedAt  DateTime?
   pharmacy   Pharmacy         @relation(fields: [pharmacyId], references: [id])
+
+  @@index([pharmacyId])
+  @@index([pharmacyId, deletedAt])
+  @@index([pharmacyId, isRead])
+  @@index([deletedAt])
 }
 
 enum UserRole {

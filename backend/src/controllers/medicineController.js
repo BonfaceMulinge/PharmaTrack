@@ -54,6 +54,16 @@ const getMedicines = async (req, res) => {
   try {
     const medicines = await prisma.medicine.findMany({
       where: { deletedAt: null, pharmacyId: req.pharmacyId },
+      select: {
+        id: true,
+        name: true,
+        quantity: true,
+        costPrice: true,
+        sellingPrice: true,
+        category: true,
+        createdAt: true,
+        updatedAt: true,
+      },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -392,7 +402,18 @@ const getStockMovements = async (req, res) => {
   try {
     const movements = await prisma.stockMovement.findMany({
       where: { deletedAt: null, pharmacyId: req.pharmacyId },
-      include: { medicine: true, user: true },
+      select: {
+        id: true,
+        type: true,
+        quantity: true,
+        previousStock: true,
+        balanceAfter: true,
+        referenceType: true,
+        notes: true,
+        createdAt: true,
+        medicine: { select: { name: true } },
+        user: { select: { fullName: true, username: true } },
+      },
       orderBy: { createdAt: 'desc' },
       take: 50,
     });

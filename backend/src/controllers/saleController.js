@@ -2,12 +2,39 @@ const prisma = require('../utils/prisma');
 
 const getSales = async (req, res) => {
   try {
-    const sales = await prisma.sale.findMany({
-      where: { deletedAt: null, pharmacyId: req.pharmacyId },
-      include: { items: true, payments: true, user: { select: { fullName: true, username: true } } },
-      orderBy: { createdAt: 'desc' },
-    });
-    res.json(sales);
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 50));
+    const skip = (page - 1) * limit;
+
+    const [sales, total] = await Promise.all([
+      prisma.sale.findMany({
+        where: { deletedAt: null, pharmacyId: req.pharmacyId },
+        select: {
+          id: true,
+          pharmacyId: true,
+          userId: true,
+          saleDate: true,
+          totalAmount: true,
+          discount: true,
+          tax: true,
+          paymentMethod: true,
+          status: true,
+          receiptNumber: true,
+          notes: true,
+          createdAt: true,
+          items: { select: { id: true, medicineId: true, quantity: true, unitPrice: true, totalAmount: true, discount: true } },
+          payments: { select: { id: true, amount: true, method: true, referenceNumber: true, status: true } },
+          user: { select: { fullName: true, username: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      prisma.sale.count({
+        where: { deletedAt: null, pharmacyId: req.pharmacyId },
+      }),
+    ]);
+    res.json({ sales, total, page, limit });
   } catch (error) {
     console.error('[Sales] Fetch error:', error);
     res.status(500).json({ message: 'Failed to fetch sales' });

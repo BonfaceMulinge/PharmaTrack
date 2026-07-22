@@ -13,7 +13,19 @@ const authenticate = async (req, res, next) => {
 
     const user = await prisma.user.findUnique({
       where: { id: decoded.id },
-      include: { pharmacy: true },
+      select: {
+        id: true,
+        email: true,
+        username: true,
+        fullName: true,
+        role: true,
+        phone: true,
+        isSuperAdmin: true,
+        mustChangePassword: true,
+        isActive: true,
+        pharmacyId: true,
+        pharmacy: { select: { id: true, name: true, subscriptionStatus: true, subscriptionExpiryDate: true } },
+      },
     });
     if (!user || !user.isActive) {
       return res.status(401).json({ message: 'Invalid or inactive user' });

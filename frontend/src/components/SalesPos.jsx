@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo, useCallback, memo } from 'react';
 import { authFetch, API_URL, getUser } from '../api';
+import { useDebounce } from '../hooks/useDebounce';
 
 const formatCurrency = (value) =>
   new Intl.NumberFormat('en-KE', {
@@ -9,6 +10,70 @@ const formatCurrency = (value) =>
   }).format(value ?? 0);
 
 const getCurrentStock = (medicine) => Number(medicine.quantity ?? 0);
+
+const MedicineCard = memo(function MedicineCard({ medicine, onAddToCart }) {
+  return (
+    <article className="medicine-card">
+      <div className="medicine-card-media">
+        <span>{medicine.name?.charAt(0) || 'M'}</span>
+      </div>
+      <div className="medicine-card-body">
+        <div className="pill-row">
+          <span className="pill">{medicine.category || 'Other'}</span>
+          <span className="pill">Stock {getCurrentStock(medicine)}</span>
+        </div>
+        <h4>{medicine.name}</h4>
+        <div className="price-row">
+          <strong>{formatCurrency(Number(medicine.sellingPrice))}</strong>
+          <button className="primary-btn" type="button" onClick={() => onAddToCart(medicine)}>
+            Add to Cart
+          </button>
+        </div>
+      </div>
+    </article>
+  );
+});
+
+const CartItem = memo(function CartItem({ item, onUpdateQuantity, onRemove }) {
+  return (
+    <div className="cart-item">
+      <div>
+        <strong>{item.name}</strong>
+        <p>{formatCurrency(item.unitPrice)} each</p>
+      </div>
+      <div className="qty-controls">
+        <button className="qty-btn" type="button" onClick={() => onUpdateQuantity(item.medicineId, -1)}>&minus;</button>
+        <span>{item.quantity}</span>
+        <button className="qty-btn" type="button" onClick={() => onUpdateQuantity(item.medicineId, 1)}>+</button>
+      </div>
+      <div className="cart-meta">
+        <strong>{formatCurrency(item.quantity * item.unitPrice)}</strong>
+        <button className="ghost-btn small-btn" type="button" onClick={() => onRemove(item.medicineId)}>Remove</button>
+      </div>
+    </div>
+  );
+});
+
+const Receipt = memo(function Receipt({ receipt }) {
+  return (
+    <div className="receipt-card">
+      <h4>Receipt</h4>
+      <p><strong>#{receipt.receiptNumber}</strong></p>
+      <p>{receipt.date}</p>
+      <p>Cashier: {receipt.cashierName}</p>
+      <ul>
+        {receipt.items.map((item) => (
+          <li key={item.medicineId}>
+            {item.name} x {item.quantity} &mdash; {formatCurrency(item.subtotal)}
+          </li>
+        ))}
+      </ul>
+      <p><strong>Total: {formatCurrency(receipt.total)}</strong></p>
+      <p>Payment: {receipt.paymentMethod}</p>
+      <button className="ghost-btn" type="button" onClick={() => window.print()}>Print Receipt</button>
+    </div>
+  );
+});
 
 function SalesPos({ onSaleComplete, onBackToDashboard }) {
   const [medicines, setMedicines] = useState([]);
@@ -23,9 +88,10 @@ function SalesPos({ onSaleComplete, onBackToDashboard }) {
   const [success, setSuccess] = useState('');
   const [receipt, setReceipt] = useState(null);
 
-  const loadMedicines = async () => {
+  const debouncedSearch = useDebounce(searchTerm, 150);
+
+  const loadMedicines = useCallback(async () => {
     try {
-      setIsLoading(true);
       const response = await authFetch(`${API_URL}/medicines`);
       if (!response.ok) throw new Error('Failed to load medicines');
       const data = await response.json();
@@ -33,10 +99,8 @@ function SalesPos({ onSaleComplete, onBackToDashboard }) {
     } catch (err) {
       console.error(err);
       setError('Unable to load medicines right now.');
-    } finally {
-      setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -50,26 +114,35 @@ function SalesPos({ onSaleComplete, onBackToDashboard }) {
         setMedicines(data.filter((medicine) => getCurrentStock(medicine) > 0));
       } catch (err) {
         console.error(err);
-        setError('Unable to load medicines right now.');
+        if (!cancelled) setError('Unable to load medicines right now.');
       } finally {
-        setIsLoading(false);
+        if (!cancelled) setIsLoading(false);
       }
     };
     load();
     return () => { cancelled = true; };
   }, []);
 
-  const categories = ['ALL', ...new Set(medicines.map((medicine) => medicine.category || 'Other'))];
+  const categories = useMemo(() =>
+    ['ALL', ...new Set(medicines.map((medicine) => medicine.category || 'Other'))],
+    [medicines]
+  );
 
-  const filteredMedicines = medicines.filter((medicine) => {
-    const matchesSearch = medicine.name.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = selectedCategory === 'ALL' || medicine.category === selectedCategory;
-    return matchesSearch && matchesCategory;
-  });
+  const filteredMedicines = useMemo(() => {
+    const term = debouncedSearch.toLowerCase();
+    return medicines.filter((medicine) => {
+      const matchesSearch = medicine.name.toLowerCase().includes(term);
+      const matchesCategory = selectedCategory === 'ALL' || medicine.category === selectedCategory;
+      return matchesSearch && matchesCategory;
+    });
+  }, [medicines, debouncedSearch, selectedCategory]);
 
-  const total = cart.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
+  const total = useMemo(() =>
+    cart.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0),
+    [cart]
+  );
 
-  const addToCart = (medicine) => {
+  const addToCart = useCallback((medicine) => {
     setError('');
     setCart((current) => {
       const existing = current.find((item) => item.medicineId === medicine.id);
@@ -85,9 +158,9 @@ function SalesPos({ onSaleComplete, onBackToDashboard }) {
       }
       return [...current, { medicineId: medicine.id, name: medicine.name, unitPrice: Number(medicine.sellingPrice), quantity: 1, availableQuantity: currentStock }];
     });
-  };
+  }, []);
 
-  const updateQuantity = (medicineId, delta) => {
+  const updateQuantity = useCallback((medicineId, delta) => {
     setCart((current) =>
       current.flatMap((item) => {
         if (item.medicineId !== medicineId) return [item];
@@ -101,14 +174,30 @@ function SalesPos({ onSaleComplete, onBackToDashboard }) {
       })
     );
     setError('');
-  };
+  }, []);
 
-  const removeFromCart = (medicineId) => {
+  const removeFromCart = useCallback((medicineId) => {
     setCart((current) => current.filter((item) => item.medicineId !== medicineId));
     setError('');
-  };
+  }, []);
 
-  const handleSubmit = async (event) => {
+  const handleSearchChange = useCallback((e) => {
+    setSearchTerm(e.target.value);
+  }, []);
+
+  const handleCategoryChange = useCallback((e) => {
+    setSelectedCategory(e.target.value);
+  }, []);
+
+  const handleReceiptNumberChange = useCallback((e) => {
+    setReceiptNumber(e.target.value);
+  }, []);
+
+  const handlePaymentMethodChange = useCallback((e) => {
+    setPaymentMethod(e.target.value);
+  }, []);
+
+  const handleSubmit = useCallback(async (event) => {
     event.preventDefault();
     if (!cart.length) {
       setError('Add at least one medicine to the cart before checkout.');
@@ -166,7 +255,7 @@ function SalesPos({ onSaleComplete, onBackToDashboard }) {
     } finally {
       setIsSubmitting(false);
     }
-  };
+  }, [cart, total, paymentMethod, receiptNumber, onSaleComplete, loadMedicines]);
 
   return (
     <div className="pos-shell">
@@ -193,8 +282,8 @@ function SalesPos({ onSaleComplete, onBackToDashboard }) {
           </div>
 
           <div className="pos-filters">
-            <input className="search-input" placeholder="Search by medicine name" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} />
-            <select value={selectedCategory} onChange={(event) => setSelectedCategory(event.target.value)}>
+            <input className="search-input" placeholder="Search by medicine name" value={searchTerm} onChange={handleSearchChange} />
+            <select value={selectedCategory} onChange={handleCategoryChange}>
               {categories.map((category) => (
                 <option key={category} value={category}>{category}</option>
               ))}
@@ -206,24 +295,7 @@ function SalesPos({ onSaleComplete, onBackToDashboard }) {
           ) : (
             <div className="medicine-grid">
               {filteredMedicines.map((medicine) => (
-                <article key={medicine.id} className="medicine-card">
-                  <div className="medicine-card-media">
-                    <span>{medicine.name?.charAt(0) || 'M'}</span>
-                  </div>
-                  <div className="medicine-card-body">
-                    <div className="pill-row">
-                      <span className="pill">{medicine.category || 'Other'}</span>
-                      <span className="pill">Stock {getCurrentStock(medicine)}</span>
-                    </div>
-                    <h4>{medicine.name}</h4>
-                    <div className="price-row">
-                      <strong>{formatCurrency(Number(medicine.sellingPrice))}</strong>
-                      <button className="primary-btn" type="button" onClick={() => addToCart(medicine)}>
-                        Add to Cart
-                      </button>
-                    </div>
-                  </div>
-                </article>
+                <MedicineCard key={medicine.id} medicine={medicine} onAddToCart={addToCart} />
               ))}
               {filteredMedicines.length === 0 && (
                 <div className="empty-state-full">No medicines available</div>
@@ -243,29 +315,15 @@ function SalesPos({ onSaleComplete, onBackToDashboard }) {
           ) : (
             <div className="cart-items">
               {cart.map((item) => (
-                <div key={item.medicineId} className="cart-item">
-                  <div>
-                    <strong>{item.name}</strong>
-                    <p>{formatCurrency(item.unitPrice)} each</p>
-                  </div>
-                  <div className="qty-controls">
-                    <button className="qty-btn" type="button" onClick={() => updateQuantity(item.medicineId, -1)}>&minus;</button>
-                    <span>{item.quantity}</span>
-                    <button className="qty-btn" type="button" onClick={() => updateQuantity(item.medicineId, 1)}>+</button>
-                  </div>
-                  <div className="cart-meta">
-                    <strong>{formatCurrency(item.quantity * item.unitPrice)}</strong>
-                    <button className="ghost-btn small-btn" type="button" onClick={() => removeFromCart(item.medicineId)}>Remove</button>
-                  </div>
-                </div>
+                <CartItem key={item.medicineId} item={item} onUpdateQuantity={updateQuantity} onRemove={removeFromCart} />
               ))}
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="checkout-form">
             <div className="form-grid">
-              <input placeholder="Receipt Number" value={receiptNumber} onChange={(event) => setReceiptNumber(event.target.value)} />
-              <select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)}>
+              <input placeholder="Receipt Number" value={receiptNumber} onChange={handleReceiptNumberChange} />
+              <select value={paymentMethod} onChange={handlePaymentMethodChange}>
                 <option value="CASH">Cash</option>
                 <option value="CARD">Card</option>
                 <option value="MOBILE_MONEY">Mobile Money</option>
@@ -282,28 +340,11 @@ function SalesPos({ onSaleComplete, onBackToDashboard }) {
             </div>
           </form>
 
-          {receipt && (
-            <div className="receipt-card">
-              <h4>Receipt</h4>
-              <p><strong>#{receipt.receiptNumber}</strong></p>
-              <p>{receipt.date}</p>
-              <p>Cashier: {receipt.cashierName}</p>
-              <ul>
-                {receipt.items.map((item) => (
-                  <li key={item.medicineId}>
-                    {item.name} x {item.quantity} &mdash; {formatCurrency(item.subtotal)}
-                  </li>
-                ))}
-              </ul>
-              <p><strong>Total: {formatCurrency(receipt.total)}</strong></p>
-              <p>Payment: {receipt.paymentMethod}</p>
-              <button className="ghost-btn" type="button" onClick={() => window.print()}>Print Receipt</button>
-            </div>
-          )}
+          {receipt && <Receipt receipt={receipt} />}
         </aside>
       </div>
     </div>
   );
 }
 
-export default SalesPos;
+export default memo(SalesPos);

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, memo } from 'react';
 import { API_URL } from '../api';
 import SuperAdminPharmacyManagement from './SuperAdminPharmacyManagement';
 
@@ -7,13 +7,25 @@ const SUPER_ADMIN_NAV = [
   { label: 'Pharmacies', id: 'sa-pharmacies', icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4' },
 ]
 
+const StatCard = memo(function StatCard({ iconPath, label, value, iconClass }) {
+  return (
+    <div className="stat-card">
+      <div className={`stat-icon ${iconClass}`}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d={iconPath}/></svg>
+      </div>
+      <p>{label}</p>
+      <h3>{value}</h3>
+    </div>
+  );
+});
+
 function SuperAdminDashboard({ onLogout }) {
   const [activeNav, setActiveNav] = useState('sa-dashboard');
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const fetchStats = async () => {
+  const fetchStats = useCallback(async () => {
     try {
       const res = await fetch(`${API_URL}/super-admin/dashboard`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('pharmatrack_token')}` },
@@ -26,7 +38,7 @@ function SuperAdminDashboard({ onLogout }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -47,10 +59,14 @@ function SuperAdminDashboard({ onLogout }) {
     return () => { cancelled = true; };
   }, []);
 
-  const handleNav = (id) => {
+  const handleNav = useCallback((id) => {
     setActiveNav(id);
     setMenuOpen(false);
-  };
+  }, []);
+
+  const handleToggleMenu = useCallback(() => {
+    setMenuOpen((o) => !o);
+  }, []);
 
   return (
     <div className="dashboard-shell">
@@ -63,7 +79,7 @@ function SuperAdminDashboard({ onLogout }) {
           </div>
         </div>
 
-        <button className="menu-toggle" type="button" onClick={() => setMenuOpen((o) => !o)}>
+        <button className="menu-toggle" type="button" onClick={handleToggleMenu}>
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
         </button>
 
@@ -97,69 +113,21 @@ function SuperAdminDashboard({ onLogout }) {
           <div className="page-section" id="sa-dashboard">
             <div className="topbar">
               <h1>Dashboard</h1>
-              <button className="primary-btn" onClick={() => { fetchStats(); }}>Refresh</button>
+              <button className="primary-btn" onClick={fetchStats}>Refresh</button>
             </div>
             {loading ? (
               <div className="home-loading"><div className="spinner" /><span>Loading...</span></div>
             ) : stats ? (
               <>
                 <div className="stats-grid">
-                  <div className="stat-card">
-                    <div className="stat-icon stat-icon-green">
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
-                    </div>
-                    <p>Total Pharmacies</p>
-                    <h3>{stats.stats.totalPharmacies}</h3>
-                  </div>
-                  <div className="stat-card">
-                    <div className="stat-icon stat-icon-blue">
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                    </div>
-                    <p>Active</p>
-                    <h3>{stats.stats.activePharmacies}</h3>
-                  </div>
-                  <div className="stat-card">
-                    <div className="stat-icon stat-icon-amber">
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
-                    </div>
-                    <p>Suspended</p>
-                    <h3>{stats.stats.suspendedPharmacies}</h3>
-                  </div>
-                  <div className="stat-card">
-                    <div className="stat-icon stat-icon-red">
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg>
-                    </div>
-                    <p>Expired</p>
-                    <h3>{stats.stats.expiredPharmacies}</h3>
-                  </div>
-                  <div className="stat-card">
-                    <div className="stat-icon stat-icon-purple">
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"/></svg>
-                    </div>
-                    <p>Total Users</p>
-                    <h3>{stats.stats.totalUsers}</h3>
-                  </div>
-                  <div className="stat-card">
-                    <div className="stat-icon stat-icon-green">
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/></svg>
-                    </div>
-                    <p>Total Medicines</p>
-                    <h3>{stats.stats.totalMedicines}</h3>
-                  </div>
-                  <div className="stat-card">
-                    <div className="stat-icon stat-icon-blue">
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
-                    </div>
-                    <p>Total Sales</p>
-                    <h3>{stats.stats.totalSales}</h3>
-                  </div>
-                  <div className="stat-card">
-                    <div className="stat-icon stat-icon-amber">
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
-                    </div>
-                    <p>Sales Today</p>
-                    <h3>{stats.stats.salesToday}</h3>
-                  </div>
+                  <StatCard iconPath="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" label="Total Pharmacies" value={stats.stats.totalPharmacies} iconClass="stat-icon-green" />
+                  <StatCard iconPath="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" label="Active" value={stats.stats.activePharmacies} iconClass="stat-icon-blue" />
+                  <StatCard iconPath="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" label="Suspended" value={stats.stats.suspendedPharmacies} iconClass="stat-icon-amber" />
+                  <StatCard iconPath="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" label="Expired" value={stats.stats.expiredPharmacies} iconClass="stat-icon-red" />
+                  <StatCard iconPath="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" label="Total Users" value={stats.stats.totalUsers} iconClass="stat-icon-purple" />
+                  <StatCard iconPath="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" label="Total Medicines" value={stats.stats.totalMedicines} iconClass="stat-icon-green" />
+                  <StatCard iconPath="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" label="Total Sales" value={stats.stats.totalSales} iconClass="stat-icon-blue" />
+                  <StatCard iconPath="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" label="Sales Today" value={stats.stats.salesToday} iconClass="stat-icon-amber" />
                 </div>
 
                 <div className="panel" style={{ marginTop: '16px' }}>
@@ -216,4 +184,4 @@ function SuperAdminDashboard({ onLogout }) {
   );
 }
 
-export default SuperAdminDashboard;
+export default memo(SuperAdminDashboard);
