@@ -941,6 +941,16 @@ body {
   color: white;
 }
 
+.sort-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.ghost-btn.small-btn.active {
+  background: rgba(34, 197, 94, 0.25);
+  color: #5eead4;
+}
+
 .medicine-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

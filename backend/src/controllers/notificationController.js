@@ -3,7 +3,7 @@ const prisma = require('../utils/prisma');
 const getNotifications = async (req, res) => {
   try {
     const notifications = await prisma.notification.findMany({
-      where: { deletedAt: null, pharmacyId: req.pharmacyId },
+      where: { deletedAt: null, pharmacyId: req.pharmacyId, isRead: false },
       orderBy: { createdAt: 'desc' },
       take: 50,
     });
@@ -17,27 +17,25 @@ const getNotifications = async (req, res) => {
 const markAsRead = async (req, res) => {
   try {
     const { id } = req.params;
-    await prisma.notification.updateMany({
+    await prisma.notification.deleteMany({
       where: { id, pharmacyId: req.pharmacyId },
-      data: { isRead: true },
     });
-    res.json({ message: 'Notification marked as read' });
+    res.json({ message: 'Notification deleted' });
   } catch (error) {
-    console.error('[Notifications] Mark read error:', error);
-    res.status(500).json({ message: 'Failed to mark notification' });
+    console.error('[Notifications] Delete error:', error);
+    res.status(500).json({ message: 'Failed to delete notification' });
   }
 };
 
 const markAllAsRead = async (req, res) => {
   try {
-    await prisma.notification.updateMany({
+    await prisma.notification.deleteMany({
       where: { pharmacyId: req.pharmacyId, isRead: false },
-      data: { isRead: true },
     });
-    res.json({ message: 'All notifications marked as read' });
+    res.json({ message: 'All notifications deleted' });
   } catch (error) {
-    console.error('[Notifications] Mark all read error:', error);
-    res.status(500).json({ message: 'Failed to mark notifications' });
+    console.error('[Notifications] Delete all error:', error);
+    res.status(500).json({ message: 'Failed to delete notifications' });
   }
 };
 

@@ -83,6 +83,7 @@ function SalesPos({ onSaleComplete, onBackToDashboard }) {
   const [receiptNumber, setReceiptNumber] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
+  const [sortBy, setSortBy] = useState('name-asc');
   const [isLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -128,12 +129,27 @@ function SalesPos({ onSaleComplete, onBackToDashboard }) {
 
   const filteredMedicines = useMemo(() => {
     const term = debouncedSearch.toLowerCase();
-    return medicines.filter((medicine) => {
+    const list = medicines.filter((medicine) => {
       const matchesSearch = medicine.name.toLowerCase().includes(term);
       const matchesCategory = selectedCategory === 'ALL' || medicine.category === selectedCategory;
       return matchesSearch && matchesCategory;
     });
-  }, [medicines, debouncedSearch, selectedCategory]);
+    const sorted = [...list];
+    switch (sortBy) {
+      case 'name-desc':
+        sorted.sort((a, b) => b.name.localeCompare(a.name));
+        break;
+      case 'stock-asc':
+        sorted.sort((a, b) => getCurrentStock(a) - getCurrentStock(b));
+        break;
+      case 'stock-desc':
+        sorted.sort((a, b) => getCurrentStock(b) - getCurrentStock(a));
+        break;
+      default:
+        sorted.sort((a, b) => a.name.localeCompare(b.name));
+    }
+    return sorted;
+  }, [medicines, debouncedSearch, selectedCategory, sortBy]);
 
   const total = useMemo(() =>
     cart.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0),
@@ -301,6 +317,14 @@ function SalesPos({ onSaleComplete, onBackToDashboard }) {
                 <option key={category} value={category}>{category}</option>
               ))}
             </select>
+            <div className="sort-buttons">
+              <button className={`ghost-btn small-btn${sortBy === 'name-asc' || sortBy === 'name-desc' ? ' active' : ''}`} type="button" onClick={() => setSortBy((prev) => prev === 'name-asc' ? 'name-desc' : 'name-asc')}>
+                Name {sortBy === 'name-asc' ? '\u25B2' : sortBy === 'name-desc' ? '\u25BC' : '\u25B2'}
+              </button>
+              <button className={`ghost-btn small-btn${sortBy === 'stock-asc' || sortBy === 'stock-desc' ? ' active' : ''}`} type="button" onClick={() => setSortBy((prev) => prev === 'stock-asc' ? 'stock-desc' : 'stock-asc')}>
+                Stock {sortBy === 'stock-asc' ? '\u25B2' : sortBy === 'stock-desc' ? '\u25BC' : '\u25B2'}
+              </button>
+            </div>
           </div>
 
           {isLoading ? (

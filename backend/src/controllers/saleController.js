@@ -127,29 +127,29 @@ const createSale = async (req, res) => {
         });
 
         if (remainingQuantity <= 10) {
-          await tx.notification.create({
-            data: {
+          const existingNotif = await tx.notification.findFirst({
+            where: {
               pharmacyId: req.pharmacyId,
-              userId: req.user.id,
               type: 'LOW_STOCK',
-              title: remainingQuantity <= 0 ? 'Out of Stock' : 'Low Stock Alert',
-              message: remainingQuantity <= 0
-                ? `${medicine.name} is out of stock.`
-                : `${medicine.name} has only ${remainingQuantity} unit(s) remaining.`,
+              deletedAt: null,
+              message: { contains: medicine.name },
             },
           });
+          if (!existingNotif) {
+            await tx.notification.create({
+              data: {
+                pharmacyId: req.pharmacyId,
+                userId: req.user.id,
+                type: 'LOW_STOCK',
+                title: remainingQuantity <= 0 ? 'Out of Stock' : 'Low Stock Alert',
+                message: remainingQuantity <= 0
+                  ? `${medicine.name} is out of stock.`
+                  : `${medicine.name} has only ${remainingQuantity} unit(s) remaining.`,
+              },
+            });
+          }
         }
       }
-
-      await tx.notification.create({
-        data: {
-          pharmacyId: req.pharmacyId,
-          userId: req.user.id,
-          type: 'SALE_COMPLETED',
-          title: 'Sale Completed',
-          message: `Sale ${finalReceiptNumber} completed for KES ${Number(saleRecord.totalAmount).toLocaleString()}.`,
-        },
-      });
 
       return saleRecord;
     });

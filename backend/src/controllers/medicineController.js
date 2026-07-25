@@ -21,6 +21,17 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 const safeUserId = (userId) => (userId && UUID_RE.test(userId) ? userId : null);
 
+const clearLowStockNotification = async (tx, pharmacyId, medicineName) => {
+  await tx.notification.deleteMany({
+    where: {
+      pharmacyId,
+      type: 'LOW_STOCK',
+      deletedAt: null,
+      message: { contains: medicineName },
+    },
+  });
+};
+
 const createStockMovement = async (tx, { pharmacyId, medicine, previousStock, quantity, type, referenceType, referenceId, notes, userId }) => {
   return tx.stockMovement.create({
     data: {
@@ -130,6 +141,10 @@ const createMedicine = async (req, res) => {
         where: { id: medicine.id },
         data: { quantity: nextStock, costPrice, sellingPrice, category },
       });
+
+      if (nextStock > 10) {
+        await clearLowStockNotification(tx, req.pharmacyId, medicine.name);
+      }
 
       if (initialStock > 0) {
         await createStockMovement(tx, {
@@ -320,6 +335,9 @@ const importMedicines = async (req, res) => {
                 category: item.category,
               },
             });
+            if (nextStock > 10) {
+              await clearLowStockNotification(tx, req.pharmacyId, medicine.name);
+            }
             summary.updated += 1;
             summary.totalUnitsAdded += item.stock;
             await createStockMovement(tx, {

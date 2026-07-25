@@ -1,17 +1,15 @@
-import { useEffect, useState, useMemo, useCallback, memo } from 'react';
+import { useEffect, useState, useCallback, memo } from 'react';
 import { authFetch, API_URL } from '../api';
 import { subscribe, Events } from '../store';
 
-const NotificationItem = memo(function NotificationItem({ notification, onMarkRead }) {
+const NotificationItem = memo(function NotificationItem({ notification, onDismiss }) {
   return (
-    <li key={notification.id} className={notification.isRead ? '' : 'unread-notification'}>
+    <li className="unread-notification">
       <div className="notif-header">
         <strong>{notification.title}</strong>
-        {!notification.isRead && (
-          <button className="ghost-btn small-btn" type="button" onClick={() => onMarkRead(notification.id)}>
-            Mark Read
-          </button>
-        )}
+        <button className="ghost-btn small-btn" type="button" onClick={() => onDismiss(notification.id)}>
+          Dismiss
+        </button>
       </div>
       <span>{notification.message}</span>
       <small>{notification.type} &middot; {new Date(notification.createdAt).toLocaleString()}</small>
@@ -19,119 +17,87 @@ const NotificationItem = memo(function NotificationItem({ notification, onMarkRe
   );
 });
 
-const LowStockItem = memo(function LowStockItem({ med }) {
-  return (
-    <li key={med.id}>
-      <strong>{med.name}</strong>
-      <span>
-        {med.quantity === 0
-          ? 'Out of stock'
-          : `${med.quantity} unit${med.quantity === 1 ? '' : 's'} remaining`}
-      </span>
-    </li>
-  );
-});
-
 function NotificationsForecasting() {
   const [notifications, setNotifications] = useState([]);
-  const [lowStockMedicines, setLowStockMedicines] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const loadNotifications = useCallback(async () => {
+    try {
+      const res = await authFetch(`${API_URL}/notifications`);
+      if (res.ok) setNotifications(await res.json());
+    } catch (error) {
+      console.error('[Notifications] Load error:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
-    const loadData = async () => {
+    let cancelled = false;
+    const init = async () => {
       try {
-        const [notifRes, medRes] = await Promise.all([
-          authFetch(`${API_URL}/notifications`),
-          authFetch(`${API_URL}/medicines`),
-        ]);
-        if (notifRes.ok) setNotifications(await notifRes.json());
-        if (medRes.ok) {
-          const data = await medRes.json();
-          setLowStockMedicines(data.filter((m) => m.quantity <= 10).sort((a, b) => a.quantity - b.quantity));
-        }
+        const res = await authFetch(`${API_URL}/notifications`);
+        if (!cancelled && res.ok) setNotifications(await res.json());
       } catch (error) {
         console.error('[Notifications] Load error:', error);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
-    loadData();
+    init();
+    const unsubSale = subscribe(Events.SALE_COMPLETED, loadNotifications);
+    const unsubMed = subscribe(Events.MEDICINES_CHANGED, loadNotifications);
+    return () => { cancelled = true; unsubSale(); unsubMed(); };
+  }, [loadNotifications]);
 
-    const unsubSale = subscribe(Events.SALE_COMPLETED, loadData);
-    const unsubMed = subscribe(Events.MEDICINES_CHANGED, loadData);
-    return () => { unsubSale(); unsubMed(); };
-  }, []);
-
-  const handleMarkAsRead = useCallback(async (id) => {
+  const handleDismiss = useCallback(async (id) => {
     try {
       await authFetch(`${API_URL}/notifications/${id}/read`, { method: 'PATCH' });
-      setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, isRead: true } : n));
+      setNotifications((prev) => prev.filter((n) => n.id !== id));
     } catch (err) {
       console.error(err);
     }
   }, []);
 
-  const handleMarkAllAsRead = useCallback(async () => {
+  const handleDismissAll = useCallback(async () => {
     try {
       await authFetch(`${API_URL}/notifications/read-all`, { method: 'PATCH' });
-      setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+      setNotifications([]);
     } catch (err) {
       console.error(err);
     }
   }, []);
-
-  const unreadCount = useMemo(() =>
-    notifications.filter((n) => !n.isRead).length,
-    [notifications]
-  );
 
   return (
     <div className="medicine-page">
       <div className="page-header">
         <div>
           <p className="eyebrow">Smart Operations</p>
-          <h2>Notifications &amp; Stock Alerts</h2>
+          <h2>Notifications &amp; Alerts</h2>
         </div>
-        {unreadCount > 0 && (
-          <button className="ghost-btn" type="button" onClick={handleMarkAllAsRead}>
-            Mark All as Read ({unreadCount})
+        {notifications.length > 0 && (
+          <button className="ghost-btn" type="button" onClick={handleDismissAll}>
+            Dismiss All ({notifications.length})
           </button>
         )}
       </div>
 
-      <div className="content-grid">
-        <div className="panel">
-          <div className="panel-header">
-            <h3>Alerts</h3>
-            {unreadCount > 0 && <span className="badge badge-active">{unreadCount} unread</span>}
-          </div>
-          <ul className="activity-list">
-            {loading ? (
-              <li>Loading notifications...</li>
-            ) : notifications.length === 0 ? (
-              <li className="empty-state">No notifications yet.</li>
-            ) : (
-              notifications.map((notification) => (
-                <NotificationItem key={notification.id} notification={notification} onMarkRead={handleMarkAsRead} />
-              ))
-            )}
-          </ul>
+      <div className="panel">
+        <div className="panel-header">
+          <h3>Alerts</h3>
+          {notifications.length > 0 && <span className="badge badge-active">{notifications.length} unread</span>}
         </div>
-
-        <div className="panel">
-          <h3>Low Stock Medicines</h3>
+        <ul className="activity-list">
           {loading ? (
-            <p className="loading-state">Loading...</p>
-          ) : lowStockMedicines.length === 0 ? (
-            <p className="empty-state">All medicines are adequately stocked.</p>
+            <li>Loading notifications...</li>
+          ) : notifications.length === 0 ? (
+            <li className="empty-state">No unread notifications.</li>
           ) : (
-            <ul className="activity-list">
-              {lowStockMedicines.map((med) => (
-                <LowStockItem key={med.id} med={med} />
-              ))}
-            </ul>
+            notifications.map((notification) => (
+              <NotificationItem key={notification.id} notification={notification} onDismiss={handleDismiss} />
+            ))
           )}
-        </div>
+        </ul>
       </div>
     </div>
   );
