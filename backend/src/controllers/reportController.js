@@ -10,6 +10,7 @@ const getAnalytics = async (req, res) => {
     const [
       todaySalesAggregate,
       monthlySalesAggregate,
+      totalSalesCount,
       medicineStats,
       recentSales,
       topSelling,
@@ -23,6 +24,10 @@ const getAnalytics = async (req, res) => {
       prisma.sale.aggregate({
         where: { deletedAt: null, pharmacyId, saleDate: { gte: startOfMonth } },
         _sum: { totalAmount: true },
+      }),
+
+      prisma.sale.count({
+        where: { deletedAt: null, pharmacyId },
       }),
 
       prisma.medicine.findMany({
@@ -100,7 +105,7 @@ const getAnalytics = async (req, res) => {
     }));
 
     res.json({
-      sales: totalSales,
+      sales: totalSalesCount,
       medicines: totalMedicines,
       lowStock,
       outOfStock,

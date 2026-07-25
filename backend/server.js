@@ -9,6 +9,7 @@ const medicineRoutes = require('./src/routes/medicineRoutes');
 const saleRoutes = require('./src/routes/saleRoutes');
 const notificationRoutes = require('./src/routes/notificationRoutes');
 const reportRoutes = require('./src/routes/reportRoutes');
+const dashboardRoutes = require('./src/routes/dashboardRoutes');
 const userRoutes = require('./src/routes/userRoutes');
 const superAdminRoutes = require('./src/routes/superAdminRoutes');
 
@@ -25,6 +26,7 @@ app.use('/api/medicines', medicineRoutes);
 app.use('/api/sales', saleRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/super-admin', superAdminRoutes);
 

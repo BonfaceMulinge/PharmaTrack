@@ -57,28 +57,34 @@ function HomePage({ onNavigate }) {
   useEffect(() => {
     let cancelled = false;
     const loadData = async () => {
-      const [analyticsRes, notifRes] = await Promise.all([
-        authFetch(`${API_URL}/reports/analytics`),
-        authFetch(`${API_URL}/notifications`),
-      ]);
-      if (cancelled) return;
-      if (analyticsRes.ok) {
-        const a = await analyticsRes.json();
-        setStats({
-          todayRevenue: a.todayRevenue ?? 0,
-          todayTransactions: a.todayTransactions ?? 0,
-          todayProfit: a.todayProfit ?? 0,
-          totalMedicines: a.medicines ?? 0,
-          totalUnitsInStock: a.totalUnitsInStock ?? 0,
-          lowStock: a.lowStock ?? 0,
-          outOfStock: a.outOfStock ?? 0,
-          inventoryValue: a.inventoryValue ?? 0,
-        });
-        setRecentActivity(a.recentActivity ?? []);
-      }
-      if (notifRes.ok) {
-        const data = await notifRes.json();
-        setNotifications(data.filter((n) => !n.isRead).slice(0, 5));
+      try {
+        const [dashRes, notifRes] = await Promise.all([
+          authFetch(`${API_URL}/dashboard`),
+          authFetch(`${API_URL}/notifications`),
+        ]);
+        if (cancelled) return;
+        if (dashRes.ok) {
+          const d = await dashRes.json();
+          setStats({
+            todayRevenue: d.todaysRevenue ?? 0,
+            todayTransactions: d.todaysTransactions ?? 0,
+            todayProfit: d.todayProfit ?? 0,
+            totalMedicines: d.totalMedicines ?? 0,
+            totalUnitsInStock: 0,
+            lowStock: d.lowStockCount ?? 0,
+            outOfStock: 0,
+            inventoryValue: d.inventoryValue ?? 0,
+          });
+          setRecentActivity(d.recentActivity ?? []);
+        } else {
+          console.error('[Dashboard] Failed to load stats:', dashRes.status);
+        }
+        if (notifRes.ok) {
+          const data = await notifRes.json();
+          setNotifications(data.filter((n) => !n.isRead).slice(0, 5));
+        }
+      } catch (err) {
+        console.error('[Dashboard] Load error:', err);
       }
     };
     loadData();

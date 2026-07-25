@@ -152,7 +152,8 @@ function MedicineManagement() {
 
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.message || 'Failed');
-      setMedicines((prev) => prev.map((m) => m.id === tempId ? { ...m, ...payload } : m));
+      const saved = payload.medicine || payload;
+      setMedicines((prev) => prev.map((m) => m.id === tempId ? { ...m, ...saved } : m));
       setStatus({ type: 'success', message: payload.message || 'Medicine saved successfully.' });
       emit(Events.MEDICINES_CHANGED);
     } catch (error) {
