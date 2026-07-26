@@ -41,8 +41,12 @@ const getDashboardStats = async (req, res) => {
     const medicineMap = new Map(medicineStats.map((m) => [m.id, m]));
 
     let inventoryValue = 0;
+    let totalUnitsInStock = 0;
+    let outOfStock = 0;
     for (const m of medicineStats) {
       inventoryValue += Number(m.costPrice) * m.quantity;
+      totalUnitsInStock += m.quantity;
+      if (m.quantity <= 0) outOfStock += 1;
     }
 
     const todaysRevenue = Number(todaysSales._sum.totalAmount || 0);
@@ -68,6 +72,8 @@ const getDashboardStats = async (req, res) => {
 
     res.json({
       totalMedicines,
+      totalUnitsInStock,
+      outOfStock,
       inventoryValue,
       todaysRevenue,
       todaysTransactions,

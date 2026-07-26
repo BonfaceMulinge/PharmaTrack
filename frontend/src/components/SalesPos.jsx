@@ -84,7 +84,7 @@ function SalesPos({ onSaleComplete, onBackToDashboard }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [sortBy, setSortBy] = useState('name-asc');
-  const [isLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -101,6 +101,8 @@ function SalesPos({ onSaleComplete, onBackToDashboard }) {
     } catch (err) {
       console.error(err);
       setError('Unable to load medicines right now.');
+    } finally {
+      setIsLoading(false);
     }
   }, []);
 
@@ -117,7 +119,7 @@ function SalesPos({ onSaleComplete, onBackToDashboard }) {
         if (!cancelled) setError('Unable to load medicines right now.');
       }
     };
-    init();
+    init().finally(() => { if (!cancelled) setIsLoading(false); });
     const unsub = subscribe(Events.MEDICINES_CHANGED, loadMedicines);
     return () => { cancelled = true; unsub(); };
   }, [loadMedicines]);

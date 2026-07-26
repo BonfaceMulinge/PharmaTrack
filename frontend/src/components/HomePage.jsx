@@ -70,9 +70,9 @@ function HomePage({ onNavigate }) {
             todayTransactions: d.todaysTransactions ?? 0,
             todayProfit: d.todayProfit ?? 0,
             totalMedicines: d.totalMedicines ?? 0,
-            totalUnitsInStock: 0,
+            totalUnitsInStock: d.totalUnitsInStock ?? 0,
             lowStock: d.lowStockCount ?? 0,
-            outOfStock: 0,
+            outOfStock: d.outOfStock ?? 0,
             inventoryValue: d.inventoryValue ?? 0,
           });
           setRecentActivity(d.recentActivity ?? []);
