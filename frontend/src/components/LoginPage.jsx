@@ -1,11 +1,14 @@
 import { useState, useCallback, memo } from 'react';
-import { API_URL, setTokens, setUser } from '../api';
+import { API_URL, STATIC_URL, setTokens, setUser, getUser } from '../api';
 
 function LoginPage({ onLogin, onSwitchToSuperAdmin }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  const prevUser = getUser();
+  const logoUrl = prevUser?.pharmacyLogo ? `${STATIC_URL}${prevUser.pharmacyLogo}` : null;
 
   const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
@@ -41,7 +44,11 @@ function LoginPage({ onLogin, onSwitchToSuperAdmin }) {
         <div className="auth-card">
           <div className="auth-brand">
             <div className="auth-logo">
-              <div className="brand-badge auth-badge">PT</div>
+              {logoUrl ? (
+                <img src={logoUrl} alt="Pharmacy Logo" className="auth-logo-img" />
+              ) : (
+                <div className="brand-badge auth-badge">PT</div>
+              )}
             </div>
             <h1>PharmaTrack</h1>
             <p>Pharmacy Inventory & POS System</p>

@@ -12,6 +12,7 @@ import Medicines from './pages/Medicines'
 import Sales from './pages/Sales'
 import Receipts from './pages/Receipts'
 import Notifications from './pages/Notifications'
+import Settings from './pages/Settings'
 
 function ChangePasswordModal({ onSuccess }) {
   const [currentPassword, setCurrentPassword] = useState('');
@@ -153,6 +154,7 @@ function App() {
         <Route path="sales" element={<Sales />} />
         <Route path="receipts" element={<Receipts />} />
         <Route path="notifications" element={<Notifications />} />
+        <Route path="settings" element={<Settings user={authState.user} onUserUpdate={(u) => setAuthState((s) => ({ ...s, user: { ...s.user, ...u } }))} />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

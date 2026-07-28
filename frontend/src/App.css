@@ -2295,3 +2295,176 @@ code {
   0%, 100% { opacity: 0.4; }
   50% { opacity: 0.8; }
 }
+
+/* ===== BRAND LOGO (Header) ===== */
+.brand-logo-img {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  object-fit: contain;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* ===== AUTH LOGO (Login) ===== */
+.auth-logo-img {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  object-fit: contain;
+  display: block;
+  margin: 0 auto;
+}
+
+/* ===== SETTINGS PAGE ===== */
+.settings-page {
+  padding: 0 28px 28px;
+}
+
+.settings-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.settings-tab {
+  padding: 10px 20px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.settings-tab:hover {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.settings-tab.active {
+  color: #22c55e;
+  border-bottom-color: #22c55e;
+}
+
+.settings-content {
+  max-width: 560px;
+}
+
+.settings-section {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  padding: 28px;
+}
+
+.settings-section h3 {
+  margin: 0 0 4px;
+  font-size: 1.15rem;
+  color: #f8fafc;
+}
+
+.settings-section-desc {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.85rem;
+  margin: 0 0 20px;
+}
+
+.settings-hint {
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 0.78rem;
+  margin: 8px 0 0;
+}
+
+.settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.settings-field label {
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 500;
+}
+
+.settings-field input {
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: #f8fafc;
+  font-size: 0.9rem;
+}
+
+.settings-field input:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.settings-divider {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  margin: 8px 0;
+}
+
+/* ===== BRANDING ===== */
+.branding-preview-area {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.branding-logo-preview {
+  width: 120px;
+  height: 120px;
+  border-radius: 16px;
+  object-fit: contain;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.branding-logo-placeholder {
+  width: 120px;
+  height: 120px;
+  border-radius: 16px;
+  border: 2px dashed rgba(255, 255, 255, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.branding-logo-placeholder span {
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 0.8rem;
+  text-align: center;
+  padding: 8px;
+}
+
+.branding-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.branding-upload-btn {
+  cursor: pointer;
+}
+
+.danger-btn {
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.danger-btn:hover {
+  background: rgba(239, 68, 68, 0.1);
+}

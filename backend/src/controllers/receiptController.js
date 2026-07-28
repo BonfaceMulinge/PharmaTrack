@@ -1,4 +1,25 @@
+const path = require('path');
+const fs = require('fs');
+const multer = require('multer');
 const prisma = require('../utils/prisma');
+
+const uploadDir = path.join(__dirname, '../../uploads/logos');
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, uploadDir),
+  filename: (req, _file, cb) => cb(null, `${req.pharmacyId}.png`),
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 2 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = ['image/png', 'image/jpeg', 'image/jpg'];
+    if (allowed.includes(file.mimetype)) cb(null, true);
+    else cb(new Error('Only PNG, JPG and JPEG images are allowed'));
+  },
+});
 
 const createReceipt = async (tx, { saleId, pharmacyId, userId, amountPaid, balance, items, subtotal, discount, tax, totalAmount, paymentMethod, receiptNumber }) => {
   return tx.receipt.create({
@@ -221,4 +242,46 @@ const updatePharmacyProfile = async (req, res) => {
   }
 };
 
-module.exports = { createReceipt, getReceipts, getReceipt, getRecentReceipts, getPharmacyProfile, updatePharmacyProfile };
+const uploadLogo = [
+  upload.single('logo'),
+  async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: 'No file uploaded' });
+      }
+      const logoUrl = `/uploads/logos/${req.file.filename}`;
+      const updated = await prisma.pharmacy.update({
+        where: { id: req.pharmacyId },
+        data: { logo: logoUrl },
+        select: { id: true, logo: true },
+      });
+      res.json({ logo: updated.logo, message: 'Logo uploaded successfully' });
+    } catch (error) {
+      console.error('[Receipts] Logo upload error:', error);
+      res.status(500).json({ message: 'Failed to upload logo' });
+    }
+  },
+];
+
+const removeLogo = async (req, res) => {
+  try {
+    const pharmacy = await prisma.pharmacy.findUnique({
+      where: { id: req.pharmacyId },
+      select: { logo: true },
+    });
+    if (pharmacy?.logo) {
+      const filePath = path.join(__dirname, '../..', pharmacy.logo);
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    }
+    await prisma.pharmacy.update({
+      where: { id: req.pharmacyId },
+      data: { logo: null },
+    });
+    res.json({ message: 'Logo removed successfully' });
+  } catch (error) {
+    console.error('[Receipts] Logo remove error:', error);
+    res.status(500).json({ message: 'Failed to remove logo' });
+  }
+};
+
+module.exports = { createReceipt, getReceipts, getReceipt, getRecentReceipts, getPharmacyProfile, updatePharmacyProfile, uploadLogo, removeLogo };

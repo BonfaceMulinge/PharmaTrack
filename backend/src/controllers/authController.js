@@ -86,6 +86,7 @@ const login = async (req, res) => {
         mustChangePassword: user.mustChangePassword,
         pharmacyId: user.pharmacyId,
         pharmacyName: user.pharmacy?.name || null,
+        pharmacyLogo: user.pharmacy?.logo || null,
       },
       token,
       refreshToken,
@@ -165,4 +166,40 @@ const getProfile = async (req, res) => {
   });
 };
 
-module.exports = { login, refresh, changePassword, getProfile };
+const updateProfile = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { fullName, phone, currentPassword, newPassword } = req.body;
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const updateData = {};
+    if (fullName !== undefined) updateData.fullName = fullName.trim();
+    if (phone !== undefined) updateData.phone = phone || null;
+
+    if (newPassword) {
+      if (!currentPassword) {
+        return res.status(400).json({ message: 'Current password is required to set a new password' });
+      }
+      const isValid = await bcrypt.compare(currentPassword, user.passwordHash);
+      if (!isValid) {
+        return res.status(400).json({ message: 'Current password is incorrect' });
+      }
+      updateData.passwordHash = await bcrypt.hash(newPassword, 10);
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data: updateData,
+      select: { id: true, email: true, username: true, fullName: true, role: true, phone: true, isSuperAdmin: true },
+    });
+
+    res.json({ user: updated, message: 'Profile updated successfully' });
+  } catch (error) {
+    console.error('[Auth] Profile update error:', error);
+    res.status(500).json({ message: 'Failed to update profile' });
+  }
+};
+
+module.exports = { login, refresh, changePassword, getProfile, updateProfile };
