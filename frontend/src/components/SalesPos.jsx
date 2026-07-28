@@ -1,15 +1,14 @@
 import { useEffect, useState, useMemo, useCallback, memo } from 'react';
 import { authFetch, API_URL } from '../api';
 import { useDebounce } from '../hooks/useDebounce';
-import { subscribe, Events } from '../store';
+import {
+  getMedicines,
+  fetchMedicines,
+  onMedicinesChange,
+  applyOptimisticBulkUpdate,
+} from '../cache';
+import formatCurrency from '../utils/formatCurrency';
 import ReceiptModal from './ReceiptModal';
-
-const formatCurrency = (value) =>
-  new Intl.NumberFormat('en-KE', {
-    style: 'currency',
-    currency: 'KES',
-    maximumFractionDigits: 0,
-  }).format(value ?? 0);
 
 const getCurrentStock = (medicine) => Number(medicine.quantity ?? 0);
 
@@ -56,15 +55,35 @@ const CartItem = memo(function CartItem({ item, onUpdateQuantity, onRemove }) {
   );
 });
 
+function POSSkeleton() {
+  return (
+    <div className="medicine-grid">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div className="skeleton-card" key={i}>
+          <div className="skeleton-card-media" />
+          <div className="skeleton-card-body">
+            <div className="skeleton-line skeleton-pill" />
+            <div className="skeleton-line" style={{ width: '80%', height: '18px' }} />
+            <div className="skeleton-line" style={{ width: '50%' }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function SalesPos({ onSaleComplete }) {
-  const [medicines, setMedicines] = useState([]);
+  const [medicines, setMedicines] = useState(() => {
+    const cached = getMedicines();
+    return cached.filter((m) => getCurrentStock(m) > 0);
+  });
   const [cart, setCart] = useState([]);
   const [paymentMethod, setPaymentMethod] = useState('CASH');
   const [receiptNumber, setReceiptNumber] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [sortBy, setSortBy] = useState('name-asc');
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(getMedicines().length === 0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -73,46 +92,36 @@ function SalesPos({ onSaleComplete }) {
 
   const debouncedSearch = useDebounce(searchTerm, 150);
 
-  const loadMedicines = useCallback(async () => {
-    try {
-      const response = await authFetch(`${API_URL}/medicines`);
-      if (!response.ok) throw new Error('Failed to load medicines');
-      const data = await response.json();
-      setMedicines(data.filter((medicine) => getCurrentStock(medicine) > 0));
-    } catch (err) {
-      console.error(err);
-      setError('Unable to load medicines right now.');
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
     let cancelled = false;
-    const init = async () => {
+
+    const loadProfile = async () => {
       try {
-        const [medRes, profileRes] = await Promise.all([
-          authFetch(`${API_URL}/medicines`),
-          authFetch(`${API_URL}/receipts/pharmacy-profile`),
-        ]);
-        if (cancelled) return;
-        if (medRes.ok) {
-          const data = await medRes.json();
-          setMedicines(data.filter((medicine) => getCurrentStock(medicine) > 0));
-        }
-        if (profileRes.ok) {
-          const pData = await profileRes.json();
+        const res = await authFetch(`${API_URL}/receipts/pharmacy-profile`);
+        if (!cancelled && res.ok) {
+          const pData = await res.json();
           setPharmacyProfile(pData.pharmacy);
         }
-      } catch (err) {
-        console.error(err);
-        if (!cancelled) setError('Unable to load medicines right now.');
-      }
+      } catch { /* silent */ }
     };
-    init().finally(() => { if (!cancelled) setIsLoading(false); });
-    const unsub = subscribe(Events.MEDICINES_CHANGED, loadMedicines);
-    return () => { cancelled = true; unsub(); };
-  }, [loadMedicines]);
+
+    fetchMedicines().then(() => {
+      if (!cancelled) {
+        setMedicines(getMedicines().filter((m) => getCurrentStock(m) > 0));
+        setIsLoading(false);
+      }
+    });
+
+    const unsubMeds = onMedicinesChange((list) => {
+      if (!cancelled) {
+        setMedicines(list.filter((m) => getCurrentStock(m) > 0));
+      }
+    });
+
+    loadProfile();
+
+    return () => { cancelled = true; unsubMeds(); };
+  }, []);
 
   const categories = useMemo(() =>
     ['ALL', ...new Set(medicines.map((medicine) => medicine.category || 'Other'))],
@@ -221,11 +230,16 @@ function SalesPos({ onSaleComplete }) {
       soldQuantity: item.quantity,
     }));
 
-    setMedicines((prev) => prev.map((med) => {
+    const updatesMap = new Map();
+    for (const med of medicines) {
       const sold = snapshot.find((s) => s.medicineId === med.id);
-      if (!sold) return med;
-      return { ...med, quantity: Math.max(0, (med.quantity || 0) - sold.soldQuantity) };
-    }));
+      if (sold) {
+        updatesMap.set(med.id, { quantity: Math.max(0, (med.quantity || 0) - sold.soldQuantity) });
+      }
+    }
+    applyOptimisticBulkUpdate(updatesMap);
+
+    setCart([]);
 
     const payload = {
       totalAmount: total,
@@ -233,12 +247,15 @@ function SalesPos({ onSaleComplete }) {
       tax: 0,
       paymentMethod,
       receiptNumber: finalReceipt,
-      items: cart.map((item) => ({
-        medicineId: item.medicineId,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
-        totalAmount: item.quantity * item.unitPrice,
-      })),
+      items: snapshot.map((item) => {
+        const cartItem = cart.find((ci) => ci.medicineId === item.medicineId);
+        return {
+          medicineId: item.medicineId,
+          quantity: item.quantity,
+          unitPrice: cartItem.unitPrice,
+          totalAmount: item.quantity * cartItem.unitPrice,
+        };
+      }),
       payments: [{ amount: total, method: paymentMethod }],
     };
 
@@ -253,20 +270,22 @@ function SalesPos({ onSaleComplete }) {
 
       setReceiptData(result.receipt || null);
       setSuccess(result.message || 'Sale completed successfully');
-      if (onSaleComplete) onSaleComplete();
-      setCart([]);
       setReceiptNumber('');
+      if (onSaleComplete) onSaleComplete();
     } catch (err) {
-      setMedicines((prev) => prev.map((med) => {
+      for (const med of medicines) {
         const sold = snapshot.find((s) => s.medicineId === med.id);
-        if (!sold) return med;
-        return { ...med, quantity: (med.quantity || 0) + sold.soldQuantity };
-      }));
+        if (sold) {
+          updatesMap.set(med.id, { quantity: (med.quantity || 0) + sold.soldQuantity });
+        }
+      }
+      applyOptimisticBulkUpdate(updatesMap);
+      setCart(cart);
       setError(err.message || 'Unable to complete the sale.');
     } finally {
       setIsSubmitting(false);
     }
-  }, [cart, total, paymentMethod, receiptNumber, onSaleComplete]);
+  }, [cart, total, paymentMethod, receiptNumber, onSaleComplete, medicines]);
 
   return (
     <div className="pos-shell">
@@ -305,7 +324,7 @@ function SalesPos({ onSaleComplete }) {
           </div>
 
           {isLoading ? (
-            <div className="loading-state">Loading medicines...</div>
+            <POSSkeleton />
           ) : (
             <div className="medicine-grid">
               {filteredMedicines.map((medicine) => (

@@ -2,13 +2,7 @@ import { useEffect, useState, memo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authFetch, API_URL } from '../api';
 import { Events, subscribe } from '../store';
-
-const formatCurrency = (value) =>
-  new Intl.NumberFormat('en-KE', {
-    style: 'currency',
-    currency: 'KES',
-    maximumFractionDigits: 0,
-  }).format(value ?? 0);
+import formatCurrency from '../utils/formatCurrency';
 
 const timeAgo = (dateString) => {
   const seconds = Math.floor((Date.now() - new Date(dateString).getTime()) / 1000);
@@ -31,6 +25,43 @@ const NotificationItem = memo(function NotificationItem({ n }) {
   );
 });
 
+function DashboardSkeleton() {
+  return (
+    <div className="home-page">
+      <section className="hero-section">
+        <div className="hero-card">
+          <div className="hero-content">
+            <div className="skeleton-line skeleton-pill" style={{ width: '140px' }} />
+            <div className="skeleton-line" style={{ width: '240px', height: '28px' }} />
+            <div className="skeleton-line" style={{ width: '320px' }} />
+            <div className="skeleton-row" style={{ gap: '12px', marginTop: '16px' }}>
+              <div className="skeleton-btn" />
+              <div className="skeleton-btn" />
+            </div>
+          </div>
+          <div className="hero-metrics">
+            {[1, 2, 3].map((i) => (
+              <div className="hero-metric-card" key={i}>
+                <div className="skeleton-line" style={{ width: '100px', height: '24px' }} />
+                <div className="skeleton-line skeleton-pill" style={{ width: '80px' }} />
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+      <section className="stats-grid">
+        {[1, 2, 3, 4].map((i) => (
+          <article className="stat-card" key={i}>
+            <div className="skeleton-line" style={{ width: '40px', height: '40px', borderRadius: '12px' }} />
+            <div className="skeleton-line skeleton-pill" style={{ width: '90px' }} />
+            <div className="skeleton-line" style={{ width: '70px', height: '22px' }} />
+          </article>
+        ))}
+      </section>
+    </div>
+  );
+}
+
 function HomePage() {
   const navigate = useNavigate();
   const [stats, setStats] = useState({
@@ -45,55 +76,60 @@ function HomePage() {
   });
   const [notifications, setNotifications] = useState([]);
   const [recentReceipts, setRecentReceipts] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const loadData = useCallback(async () => {
+    try {
+      const [dashRes, notifRes, receiptsRes] = await Promise.all([
+        authFetch(`${API_URL}/dashboard`),
+        authFetch(`${API_URL}/notifications`),
+        authFetch(`${API_URL}/receipts/recent?limit=10`),
+      ]);
+      if (dashRes.ok) {
+        const d = await dashRes.json();
+        setStats({
+          todayRevenue: d.todaysRevenue ?? 0,
+          todayTransactions: d.todaysTransactions ?? 0,
+          todayProfit: d.todayProfit ?? 0,
+          totalMedicines: d.totalMedicines ?? 0,
+          totalUnitsInStock: d.totalUnitsInStock ?? 0,
+          lowStock: d.lowStockCount ?? 0,
+          outOfStock: d.outOfStock ?? 0,
+          inventoryValue: d.inventoryValue ?? 0,
+        });
+      }
+      if (notifRes.ok) {
+        const data = await notifRes.json();
+        setNotifications(data.filter((n) => !n.isRead).slice(0, 5));
+      }
+      if (receiptsRes.ok) {
+        const rData = await receiptsRes.json();
+        setRecentReceipts(rData.receipts || []);
+      }
+    } catch (err) {
+      console.error('[Dashboard] Load error:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
-    const loadData = async () => {
-      try {
-        const [dashRes, notifRes, receiptsRes] = await Promise.all([
-          authFetch(`${API_URL}/dashboard`),
-          authFetch(`${API_URL}/notifications`),
-          authFetch(`${API_URL}/receipts/recent?limit=10`),
-        ]);
-        if (cancelled) return;
-        if (dashRes.ok) {
-          const d = await dashRes.json();
-          setStats({
-            todayRevenue: d.todaysRevenue ?? 0,
-            todayTransactions: d.todaysTransactions ?? 0,
-            todayProfit: d.todayProfit ?? 0,
-            totalMedicines: d.totalMedicines ?? 0,
-            totalUnitsInStock: d.totalUnitsInStock ?? 0,
-            lowStock: d.lowStockCount ?? 0,
-            outOfStock: d.outOfStock ?? 0,
-            inventoryValue: d.inventoryValue ?? 0,
-          });
-        } else {
-          console.error('[Dashboard] Failed to load stats:', dashRes.status);
-        }
-        if (notifRes.ok) {
-          const data = await notifRes.json();
-          setNotifications(data.filter((n) => !n.isRead).slice(0, 5));
-        }
-        if (receiptsRes.ok) {
-          const rData = await receiptsRes.json();
-          setRecentReceipts(rData.receipts || []);
-        }
-      } catch (err) {
-        console.error('[Dashboard] Load error:', err);
-      }
+    const safeLoad = async () => {
+      if (!cancelled) await loadData();
     };
-    loadData();
-
-    const unsubSale = subscribe(Events.SALE_COMPLETED, loadData);
-    const unsubMed = subscribe(Events.MEDICINES_CHANGED, loadData);
-    return () => { cancelled = true; unsubSale(); unsubMed(); };
-  }, []);
+    safeLoad();
+    const unsubSale = subscribe(Events.SALE_COMPLETED, safeLoad);
+    const unsubDash = subscribe(Events.DASHBOARD_UPDATED, safeLoad);
+    return () => { cancelled = true; unsubSale(); unsubDash(); };
+  }, [loadData]);
 
   const handleNewSale = useCallback(() => navigate('/sales'), [navigate]);
   const handleManageMedicines = useCallback(() => navigate('/medicines'), [navigate]);
   const handleViewReceipts = useCallback(() => navigate('/receipts'), [navigate]);
   const handleViewNotifications = useCallback(() => navigate('/notifications'), [navigate]);
+
+  if (isLoading) return <DashboardSkeleton />;
 
   return (
     <div className="home-page">

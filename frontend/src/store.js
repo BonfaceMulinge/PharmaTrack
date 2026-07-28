@@ -3,6 +3,7 @@ const listeners = new Map();
 export const Events = {
   SALE_COMPLETED: 'SALE_COMPLETED',
   MEDICINES_CHANGED: 'MEDICINES_CHANGED',
+  DASHBOARD_UPDATED: 'DASHBOARD_UPDATED',
 };
 
 export function emit(event) {

@@ -1,7 +1,16 @@
 import { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import { authFetch, API_URL } from '../api';
-import { emit, Events, subscribe } from '../store';
+import { emit, Events } from '../store';
 import { useDebounce } from '../hooks/useDebounce';
+import {
+  getMedicines,
+  fetchMedicines,
+  onMedicinesChange,
+  applyOptimisticAdd,
+  applyOptimisticUpdate,
+  applyOptimisticDelete,
+} from '../cache';
+import formatCurrency from '../utils/formatCurrency';
 
 const CATEGORIES = ['Tablets', 'Capsules', 'Syrup', 'Injection', 'Cream', 'Drops', 'Other'];
 
@@ -31,9 +40,42 @@ const SortIcon = memo(function SortIcon({ column, sortField, sortDir }) {
   return <span className="sort-indicator">{sortDir === 'asc' ? '\u25B2' : '\u25BC'}</span>;
 });
 
+function SkeletonTable() {
+  return (
+    <div className="table-responsive">
+      <table className="data-table">
+        <thead>
+          <tr>
+            <th>Medicine Name</th>
+            <th>Category</th>
+            <th>Stock</th>
+            <th>Cost Price</th>
+            <th>Selling Price</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {Array.from({ length: 8 }).map((_, i) => (
+            <tr key={i} className="skeleton-row">
+              <td><div className="skeleton-line" style={{ width: '120px' }} /></td>
+              <td><div className="skeleton-line skeleton-pill" /></td>
+              <td><div className="skeleton-line" style={{ width: '40px' }} /></td>
+              <td><div className="skeleton-line" style={{ width: '70px' }} /></td>
+              <td><div className="skeleton-line" style={{ width: '70px' }} /></td>
+              <td><div className="skeleton-line skeleton-pill" /></td>
+              <td><div className="skeleton-line" style={{ width: '60px' }} /></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function MedicineManagement() {
-  const [medicines, setMedicines] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [medicines, setMedicines] = useState(() => getMedicines());
+  const [isLoading, setIsLoading] = useState(!isCacheReady());
   const [search, setSearch] = useState('');
   const [sortField, setSortField] = useState('name');
   const [sortDir, setSortDir] = useState('asc');
@@ -46,6 +88,7 @@ function MedicineManagement() {
   const [importMessage, setImportMessage] = useState('');
   const [importErrors, setImportErrors] = useState([]);
   const [showImport, setShowImport] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
 
   const [editMedicine, setEditMedicine] = useState(null);
   const [editForm, setEditForm] = useState(initialEditForm);
@@ -57,34 +100,16 @@ function MedicineManagement() {
 
   const debouncedSearch = useDebounce(search, 150);
 
-  const loadMedicines = useCallback(async () => {
-    try {
-      const res = await authFetch(`${API_URL}/medicines`);
-      if (res.ok) setMedicines(await res.json());
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
     let cancelled = false;
-    const init = async () => {
-      try {
-        const res = await authFetch(`${API_URL}/medicines`);
-        if (!cancelled && res.ok) setMedicines(await res.json());
-      } catch (err) {
-        console.error(err);
-      } finally {
-        if (!cancelled) setIsLoading(false);
-      }
-    };
-    init();
-    const unsub1 = subscribe(Events.MEDICINES_CHANGED, loadMedicines);
-    const unsub2 = subscribe(Events.SALE_COMPLETED, loadMedicines);
-    return () => { cancelled = true; unsub1(); unsub2(); };
-  }, [loadMedicines]);
+    fetchMedicines().then(() => {
+      if (!cancelled) setIsLoading(false);
+    });
+    const unsub = onMedicinesChange((list) => {
+      if (!cancelled) setMedicines(list);
+    });
+    return () => { cancelled = true; unsub(); };
+  }, []);
 
   const filtered = useMemo(() => {
     const term = debouncedSearch.toLowerCase();
@@ -139,6 +164,9 @@ function MedicineManagement() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Failed');
+      if (data.medicine) {
+        applyOptimisticAdd(data.medicine);
+      }
       setAddStatus({ type: 'success', message: data.message || 'Medicine added successfully.' });
       setAddForm(initialForm);
       setShowAddForm(false);
@@ -155,6 +183,7 @@ function MedicineManagement() {
     if (!importFile) { setImportMessage('Please choose an Excel file first.'); return; }
     setImportMessage('');
     setImportErrors([]);
+    setIsImporting(true);
     const formData = new FormData();
     formData.append('file', importFile);
     try {
@@ -175,6 +204,8 @@ function MedicineManagement() {
       emit(Events.MEDICINES_CHANGED);
     } catch (err) {
       setImportMessage(err.message || 'Import failed');
+    } finally {
+      setIsImporting(false);
     }
   }, [importFile]);
 
@@ -216,6 +247,15 @@ function MedicineManagement() {
     if (!editMedicine) return;
     setIsEditing(true);
     setEditStatus({ type: '', message: '' });
+
+    const optimisticData = {
+      name: editForm.name,
+      costPrice: Number(editForm.costPrice),
+      sellingPrice: Number(editForm.sellingPrice),
+      category: editForm.category,
+    };
+    applyOptimisticUpdate(editMedicine.id, optimisticData);
+
     try {
       const res = await authFetch(`${API_URL}/medicines/${editMedicine.id}`, {
         method: 'PUT',
@@ -227,11 +267,18 @@ function MedicineManagement() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Update failed');
-      setEditStatus({ type: 'success', message: 'Medicine updated successfully.' });
-      setMedicines((prev) => prev.map((m) => m.id === editMedicine.id ? { ...m, ...data } : m));
+      if (!res.ok) {
+        applyOptimisticUpdate(editMedicine.id, {
+          name: editMedicine.name,
+          costPrice: Number(editMedicine.costPrice),
+          sellingPrice: Number(editMedicine.sellingPrice),
+          category: editMedicine.category,
+        });
+        throw new Error(data.message || 'Update failed');
+      }
+      if (data) applyOptimisticUpdate(editMedicine.id, data);
       emit(Events.MEDICINES_CHANGED);
-      setTimeout(closeEdit, 800);
+      closeEdit();
     } catch (err) {
       setEditStatus({ type: 'error', message: err.message });
     } finally {
@@ -246,13 +293,17 @@ function MedicineManagement() {
   const handleDelete = useCallback(async () => {
     if (!deleteTarget) return;
     setIsDeleting(true);
+
+    const targetId = deleteTarget.id;
+    applyOptimisticDelete(targetId);
+
     try {
-      const res = await authFetch(`${API_URL}/medicines/${deleteTarget.id}`, { method: 'DELETE' });
+      const res = await authFetch(`${API_URL}/medicines/${targetId}`, { method: 'DELETE' });
       if (!res.ok) { const d = await res.json(); throw new Error(d.message || 'Delete failed'); }
-      setMedicines((prev) => prev.filter((m) => m.id !== deleteTarget.id));
       setDeleteTarget(null);
       emit(Events.MEDICINES_CHANGED);
     } catch (err) {
+      fetchMedicines(true);
       console.error(err);
     } finally {
       setIsDeleting(false);
@@ -312,7 +363,9 @@ function MedicineManagement() {
             <div className="form-grid">
               <input type="file" accept=".xlsx,.xls" onChange={(e) => setImportFile(e.target.files?.[0] || null)} />
             </div>
-            <button className="primary-btn" type="submit">Upload</button>
+            <button className="primary-btn" type="submit" disabled={isImporting}>
+              {isImporting ? 'Importing...' : 'Upload'}
+            </button>
             {importMessage && <pre className="import-summary">{importMessage}</pre>}
             {importErrors.length > 0 && (
               <div className="import-errors">
@@ -336,7 +389,7 @@ function MedicineManagement() {
         </div>
 
         {isLoading ? (
-          <div className="loading-state">Loading medicines...</div>
+          <SkeletonTable />
         ) : filtered.length === 0 ? (
           <div className="empty-state-full">
             {search ? 'No medicines match your search.' : 'No medicines found. Add one to get started.'}
@@ -485,12 +538,8 @@ function MedicineManagement() {
   );
 }
 
-function formatCurrency(value) {
-  return new Intl.NumberFormat('en-KE', {
-    style: 'currency',
-    currency: 'KES',
-    maximumFractionDigits: 0,
-  }).format(value ?? 0);
+function isCacheReady() {
+  return getMedicines().length > 0;
 }
 
 export default memo(MedicineManagement);

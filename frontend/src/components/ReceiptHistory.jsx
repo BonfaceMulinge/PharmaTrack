@@ -3,13 +3,7 @@ import { authFetch, API_URL } from '../api';
 import { useDebounce } from '../hooks/useDebounce';
 import { subscribe, Events } from '../store';
 import ReceiptModal from './ReceiptModal';
-
-const formatCurrency = (value) =>
-  new Intl.NumberFormat('en-KE', {
-    style: 'currency',
-    currency: 'KES',
-    maximumFractionDigits: 0,
-  }).format(value ?? 0);
+import formatCurrency from '../utils/formatCurrency';
 
 function ReceiptHistory() {
   const [receipts, setReceipts] = useState([]);

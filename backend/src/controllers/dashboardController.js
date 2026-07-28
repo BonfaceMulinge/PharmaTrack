@@ -6,7 +6,7 @@ const getDashboardStats = async (req, res) => {
     const now = new Date();
     const startOfToday = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0));
 
-    const [todaysSales, todaysSalesDetails, medicineStats, lowStockCount] = await Promise.all([
+    const [todaysSalesAggregate, todaysSalesDetails, medicineAgg, lowStockCount, totalMedicines] = await Promise.all([
       prisma.sale.aggregate({
         where: { deletedAt: null, pharmacyId, saleDate: { gte: startOfToday } },
         _sum: { totalAmount: true },
@@ -26,38 +26,51 @@ const getDashboardStats = async (req, res) => {
         take: 10,
       }),
 
-      prisma.medicine.findMany({
+      prisma.medicine.aggregate({
         where: { deletedAt: null, pharmacyId },
-        select: { id: true, quantity: true, costPrice: true },
+        _sum: { costPrice: true, quantity: true },
+        _count: true,
       }),
 
       prisma.medicine.count({
         where: { deletedAt: null, pharmacyId, quantity: { gt: 0, lte: 10 } },
       }),
+
+      prisma.medicine.count({
+        where: { deletedAt: null, pharmacyId },
+      }),
     ]);
 
-    const totalMedicines = medicineStats.length;
+    const todaysRevenue = Number(todaysSalesAggregate._sum.totalAmount || 0);
+    const todaysTransactions = todaysSalesAggregate._count || 0;
+    const totalUnitsInStock = medicineAgg._sum.quantity || 0;
+    const totalMedicineCount = totalMedicines;
 
-    const medicineMap = new Map(medicineStats.map((m) => [m.id, m]));
+    const outOfStock = await prisma.medicine.count({
+      where: { deletedAt: null, pharmacyId, quantity: { lte: 0 } },
+    });
 
-    let inventoryValue = 0;
-    let totalUnitsInStock = 0;
-    let outOfStock = 0;
-    for (const m of medicineStats) {
-      inventoryValue += Number(m.costPrice) * m.quantity;
-      totalUnitsInStock += m.quantity;
-      if (m.quantity <= 0) outOfStock += 1;
-    }
-
-    const todaysRevenue = Number(todaysSales._sum.totalAmount || 0);
-    const todaysTransactions = todaysSales._count || 0;
+    const inventoryValueResult = await prisma.$queryRaw`
+      SELECT COALESCE(SUM("costPrice" * "quantity"), 0) as "inventoryValue"
+      FROM "Medicine"
+      WHERE "deletedAt" IS NULL AND "pharmacyId" = ${pharmacyId}
+    `;
+    const inventoryValue = Number(inventoryValueResult[0]?.inventoryValue || 0);
 
     let todayProfit = 0;
-    for (const sale of todaysSalesDetails) {
-      for (const item of sale.items) {
-        const med = medicineMap.get(item.medicineId);
-        if (med) {
-          todayProfit += (Number(item.unitPrice) - Number(med.costPrice)) * item.quantity;
+    if (todaysSalesDetails.length > 0) {
+      const medicineIds = [...new Set(todaysSalesDetails.flatMap((s) => s.items.map((i) => i.medicineId)))];
+      if (medicineIds.length > 0) {
+        const medicines = await prisma.medicine.findMany({
+          where: { id: { in: medicineIds } },
+          select: { id: true, costPrice: true },
+        });
+        const costMap = new Map(medicines.map((m) => [m.id, Number(m.costPrice)]));
+        for (const sale of todaysSalesDetails) {
+          for (const item of sale.items) {
+            const costPrice = costMap.get(item.medicineId) || 0;
+            todayProfit += (Number(item.unitPrice) - costPrice) * item.quantity;
+          }
         }
       }
     }
@@ -71,7 +84,7 @@ const getDashboardStats = async (req, res) => {
     }));
 
     res.json({
-      totalMedicines,
+      totalMedicines: totalMedicineCount,
       totalUnitsInStock,
       outOfStock,
       inventoryValue,

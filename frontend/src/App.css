@@ -2233,3 +2233,65 @@ code {
     opacity: 1;
   }
 }
+
+/* ===== SKELETON LOADERS ===== */
+.skeleton-line {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  height: 14px;
+  animation: skeletonPulse 1.5s ease-in-out infinite;
+}
+
+.skeleton-pill {
+  border-radius: 999px;
+  height: 20px;
+  width: 70px;
+}
+
+.skeleton-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.skeleton-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  height: 38px;
+  width: 120px;
+  animation: skeletonPulse 1.5s ease-in-out infinite;
+}
+
+.skeleton-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  padding: 16px;
+  display: flex;
+  gap: 12px;
+  animation: skeletonPulse 1.5s ease-in-out infinite;
+}
+
+.skeleton-card-media {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+
+.skeleton-card-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.skeleton-row > .skeleton-line {
+  height: 14px;
+}
+
+@keyframes skeletonPulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.8; }
+}

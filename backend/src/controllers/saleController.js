@@ -94,8 +94,12 @@ const createSale = async (req, res) => {
         include: { items: true, payments: true },
       });
 
+      const receiptItems = [];
       for (const item of normalizedItems) {
-        const medicine = await tx.medicine.findUnique({ where: { id: item.medicineId } });
+        const medicine = await tx.medicine.findUnique({
+          where: { id: item.medicineId },
+          select: { id: true, name: true, category: true, quantity: true },
+        });
         if (!medicine) {
           throw Object.assign(new Error(`Medicine not found: ${item.medicineId}`), { statusCode: 400 });
         }
@@ -109,6 +113,16 @@ const createSale = async (req, res) => {
         await tx.medicine.update({
           where: { id: item.medicineId },
           data: { quantity: remainingQuantity },
+        });
+
+        receiptItems.push({
+          medicineId: item.medicineId,
+          name: medicine.name,
+          category: medicine.category,
+          quantity: item.quantity,
+          unitPrice: Number(item.unitPrice),
+          subtotal: Number(item.totalAmount),
+          discount: Number(item.discount),
         });
 
         await tx.stockMovement.create({
@@ -151,57 +165,43 @@ const createSale = async (req, res) => {
         }
       }
 
-      return saleRecord;
-    });
+      const saleTotalAmount = Number(saleRecord.totalAmount);
+      const saleDiscount = Number(saleRecord.discount);
+      const saleTax = Number(saleRecord.tax);
+      const subtotal = receiptItems.reduce((sum, item) => sum + item.subtotal, 0);
+      const totalPaid = saleRecord.payments.reduce((sum, p) => sum + Number(p.amount), 0);
+      const balance = totalPaid - saleTotalAmount;
 
-    // Fetch the created sale with items and medicine names for receipt
-    const fullSale = await prisma.sale.findUnique({
-      where: { id: sale.id },
-      include: {
-        items: { include: { medicine: { select: { name: true, category: true } } } },
-        payments: true,
-      },
-    });
+      const receipt = await tx.receipt.create({
+        data: {
+          receiptNumber: finalReceiptNumber,
+          saleId: saleRecord.id,
+          pharmacyId: req.pharmacyId,
+          userId: req.user.id,
+          amountPaid: totalPaid,
+          balance: Math.max(0, balance),
+          items: receiptItems,
+          subtotal,
+          discount: saleDiscount,
+          tax: saleTax,
+          totalAmount: saleTotalAmount,
+          paymentMethod,
+        },
+      });
 
-    // Build receipt items snapshot
-    const receiptItems = fullSale.items.map((item) => ({
-      medicineId: item.medicineId,
-      name: item.medicine.name,
-      category: item.medicine.category,
-      quantity: item.quantity,
-      unitPrice: Number(item.unitPrice),
-      subtotal: Number(item.totalAmount),
-      discount: Number(item.discount),
-    }));
-
-    const saleTotalAmount = Number(fullSale.totalAmount);
-    const saleDiscount = Number(fullSale.discount);
-    const saleTax = Number(fullSale.tax);
-    const subtotal = receiptItems.reduce((sum, item) => sum + item.subtotal, 0);
-    const totalPaid = fullSale.payments.reduce((sum, p) => sum + Number(p.amount), 0);
-    const balance = totalPaid - saleTotalAmount;
-
-    // Create receipt inside a separate write (after transaction)
-    const receipt = await prisma.receipt.create({
-      data: {
-        receiptNumber: finalReceiptNumber,
-        saleId: sale.id,
-        pharmacyId: req.pharmacyId,
-        userId: req.user.id,
-        amountPaid: totalPaid,
-        balance: Math.max(0, balance),
-        items: receiptItems,
-        subtotal,
-        discount: saleDiscount,
-        tax: saleTax,
-        totalAmount: saleTotalAmount,
-        paymentMethod,
-      },
+      return { saleRecord, receiptItems, receipt };
     });
 
     return res.status(201).json({
-      sale: fullSale,
-      receipt,
+      sale: {
+        id: sale.saleRecord.id,
+        receiptNumber: finalReceiptNumber,
+        totalAmount: sale.saleRecord.totalAmount,
+        paymentMethod,
+        items: sale.receiptItems,
+        payments: sale.saleRecord.payments,
+      },
+      receipt: sale.receipt,
       receiptNumber: finalReceiptNumber,
       message: 'Sale completed successfully',
     });

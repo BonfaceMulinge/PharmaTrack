@@ -1,11 +1,5 @@
 import { useCallback, useRef, memo } from 'react';
-
-const formatCurrency = (value) =>
-  new Intl.NumberFormat('en-KE', {
-    style: 'currency',
-    currency: 'KES',
-    maximumFractionDigits: 0,
-  }).format(value ?? 0);
+import formatCurrency from '../utils/formatCurrency';
 
 const ReceiptModal = memo(function ReceiptModal({ receipt, pharmacy, onClose }) {
   const receiptRef = useRef(null);
