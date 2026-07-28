@@ -1,5 +1,6 @@
-import { useState, memo } from 'react';
+import { useState, useEffect, memo } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
+import { onBadgeChange, initNotifications } from '../utils/notificationStore';
 
 const navItems = [
   { label: 'Home', path: '/', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
@@ -20,6 +21,13 @@ export function PageLoader() {
 
 function Layout({ user, onLogout }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    initNotifications();
+    const unsub = onBadgeChange(setUnreadCount);
+    return unsub;
+  }, []);
 
   return (
     <div className="dashboard-shell">
@@ -50,6 +58,13 @@ function Layout({ user, onLogout }) {
             </NavLink>
           ))}
         </nav>
+
+        <div className="nav-bell-wrapper">
+          <NavLink to="/notifications" className="nav-bell-link" onClick={() => setMenuOpen(false)}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+            {unreadCount > 0 && <span className="notif-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>}
+          </NavLink>
+        </div>
 
         <div className="nav-user">
           <div className="nav-user-info">

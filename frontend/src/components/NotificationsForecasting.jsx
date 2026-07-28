@@ -1,72 +1,113 @@
 import { useEffect, useState, useCallback, memo } from 'react';
-import { authFetch, API_URL } from '../api';
-import { subscribe, Events } from '../store';
+import { useNavigate } from 'react-router-dom';
+import {
+  onListChange,
+  dismissNotification,
+  dismissAll,
+  initNotifications,
+} from '../utils/notificationStore';
 
-const NotificationItem = memo(function NotificationItem({ notification, onDismiss }) {
+const TYPE_CONFIG = {
+  SALE_COMPLETED: { icon: '💰', color: '#22c55e', route: '/sales' },
+  MEDICINES_CHANGED: { icon: '💊', color: '#6366f1', route: '/medicines' },
+  IMPORT_COMPLETED: { icon: '📥', color: '#f59e0b', route: '/medicines' },
+  LOW_STOCK: { icon: '⚠️', color: '#ef4444', route: '/medicines' },
+  OUT_OF_STOCK: { icon: '🚫', color: '#ef4444', route: '/medicines' },
+  MEDICINE_ADDED: { icon: '💊', color: '#22c55e', route: '/medicines' },
+  MEDICINE_UPDATED: { icon: '✏️', color: '#6366f1', route: '/medicines' },
+  MEDICINE_DELETED: { icon: '🗑️', color: '#ef4444', route: '/medicines' },
+  RECEIPT_GENERATED: { icon: '🧾', color: '#06b6d4', route: '/receipts' },
+  EXCEL_IMPORT: { icon: '📥', color: '#f59e0b', route: '/medicines' },
+};
+
+function timeAgo(dateStr) {
+  const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+  if (seconds < 5) return 'just now';
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
+const NotificationCard = memo(function NotificationCard({ notification, onDismiss, onNavigate }) {
+  const config = TYPE_CONFIG[notification.type] || { icon: '🔔', color: '#8ca0bb', route: '/notifications' };
+  const [removing, setRemoving] = useState(false);
+
+  const handleClick = useCallback(() => {
+    setRemoving(true);
+    setTimeout(() => {
+      onDismiss(notification.id);
+      onNavigate(config.route);
+    }, 300);
+  }, [notification.id, config.route, onDismiss, onNavigate]);
+
+  const handleDismiss = useCallback((e) => {
+    e.stopPropagation();
+    setRemoving(true);
+    setTimeout(() => onDismiss(notification.id), 300);
+  }, [notification.id, onDismiss]);
+
   return (
-    <li className="unread-notification">
-      <div className="notif-header">
-        <strong>{notification.title}</strong>
-        <button className="ghost-btn small-btn" type="button" onClick={() => onDismiss(notification.id)}>
-          Dismiss
-        </button>
+    <div
+      className={`notif-card ${removing ? 'notif-removing' : ''}`}
+      onClick={handleClick}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => { if (e.key === 'Enter') handleClick(); }}
+      style={{ borderLeftColor: config.color }}
+    >
+      <div className="notif-card-icon">{config.icon}</div>
+      <div className="notif-card-body">
+        <div className="notif-card-top">
+          <strong>{notification.title}</strong>
+          <small className="notif-time">{timeAgo(notification.createdAt)}</small>
+        </div>
+        <p className="notif-message">{notification.message}</p>
+        <div className="notif-card-footer">
+          <span className="notif-type-badge" style={{ background: `${config.color}20`, color: config.color }}>
+            {notification.type.replace(/_/g, ' ')}
+          </span>
+        </div>
       </div>
-      <span>{notification.message}</span>
-      <small>{notification.type} &middot; {new Date(notification.createdAt).toLocaleString()}</small>
-    </li>
+      <button
+        className="notif-close-btn"
+        type="button"
+        onClick={handleDismiss}
+        title="Dismiss"
+      >
+        ×
+      </button>
+    </div>
   );
 });
 
 function NotificationsForecasting() {
+  const navigate = useNavigate();
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
-
-  const loadNotifications = useCallback(async () => {
-    try {
-      const res = await authFetch(`${API_URL}/notifications`);
-      if (res.ok) setNotifications(await res.json());
-    } catch (error) {
-      console.error('[Notifications] Load error:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
-    let cancelled = false;
-    const init = async () => {
-      try {
-        const res = await authFetch(`${API_URL}/notifications`);
-        if (!cancelled && res.ok) setNotifications(await res.json());
-      } catch (error) {
-        console.error('[Notifications] Load error:', error);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-    init();
-    const unsubSale = subscribe(Events.SALE_COMPLETED, loadNotifications);
-    const unsubMed = subscribe(Events.MEDICINES_CHANGED, loadNotifications);
-    return () => { cancelled = true; unsubSale(); unsubMed(); };
-  }, [loadNotifications]);
-
-  const handleDismiss = useCallback(async (id) => {
-    try {
-      await authFetch(`${API_URL}/notifications/${id}/read`, { method: 'PATCH' });
-      setNotifications((prev) => prev.filter((n) => n.id !== id));
-    } catch (err) {
-      console.error(err);
-    }
+    initNotifications();
+    const unsubList = onListChange((list) => {
+      setNotifications(list);
+      setLoading(false);
+    });
+    return unsubList;
   }, []);
 
-  const handleDismissAll = useCallback(async () => {
-    try {
-      await authFetch(`${API_URL}/notifications/read-all`, { method: 'PATCH' });
-      setNotifications([]);
-    } catch (err) {
-      console.error(err);
-    }
+  const handleDismiss = useCallback((id) => {
+    dismissNotification(id);
   }, []);
+
+  const handleDismissAll = useCallback(() => {
+    dismissAll();
+  }, []);
+
+  const handleNavigate = useCallback((route) => {
+    navigate(route);
+  }, [navigate]);
 
   return (
     <div className="medicine-page">
@@ -77,7 +118,7 @@ function NotificationsForecasting() {
         </div>
         {notifications.length > 0 && (
           <button className="ghost-btn" type="button" onClick={handleDismissAll}>
-            Dismiss All ({notifications.length})
+            Clear All ({notifications.length})
           </button>
         )}
       </div>
@@ -87,17 +128,29 @@ function NotificationsForecasting() {
           <h3>Alerts</h3>
           {notifications.length > 0 && <span className="badge badge-active">{notifications.length} unread</span>}
         </div>
-        <ul className="activity-list">
-          {loading ? (
-            <li>Loading notifications...</li>
-          ) : notifications.length === 0 ? (
-            <li className="empty-state">No unread notifications.</li>
-          ) : (
-            notifications.map((notification) => (
-              <NotificationItem key={notification.id} notification={notification} onDismiss={handleDismiss} />
-            ))
-          )}
-        </ul>
+
+        {loading ? (
+          <div className="notif-loading">
+            <div className="spinner" />
+          </div>
+        ) : notifications.length === 0 ? (
+          <div className="notif-empty">
+            <div className="notif-empty-icon">🔔</div>
+            <p>All caught up!</p>
+            <span>No unread notifications.</span>
+          </div>
+        ) : (
+          <div className="notif-list">
+            {notifications.map((n) => (
+              <NotificationCard
+                key={n.id}
+                notification={n}
+                onDismiss={handleDismiss}
+                onNavigate={handleNavigate}
+              />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
