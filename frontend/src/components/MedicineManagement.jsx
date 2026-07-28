@@ -1,6 +1,7 @@
-import { useState, useCallback, memo } from 'react';
+import { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import { authFetch, API_URL } from '../api';
-import { emit, Events } from '../store';
+import { emit, Events, subscribe } from '../store';
+import { useDebounce } from '../hooks/useDebounce';
 
 const CATEGORIES = ['Tablets', 'Capsules', 'Syrup', 'Injection', 'Cream', 'Drops', 'Other'];
 
@@ -12,92 +13,176 @@ const initialForm = {
   category: 'Tablets',
 };
 
+const initialEditForm = {
+  name: '',
+  costPrice: '',
+  sellingPrice: '',
+  category: 'Tablets',
+};
+
+function getStockStatus(quantity) {
+  if (quantity <= 0) return { label: 'Out of Stock', className: 'status-out' };
+  if (quantity <= 10) return { label: 'Low Stock', className: 'status-low' };
+  return { label: 'In Stock', className: 'status-in' };
+}
+
+const SortIcon = memo(function SortIcon({ column, sortField, sortDir }) {
+  if (sortField !== column) return <span className="sort-indicator sort-inactive">&#8597;</span>;
+  return <span className="sort-indicator">{sortDir === 'asc' ? '\u25B2' : '\u25BC'}</span>;
+});
+
 function MedicineManagement() {
-  const [form, setForm] = useState(initialForm);
+  const [medicines, setMedicines] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [sortField, setSortField] = useState('name');
+  const [sortDir, setSortDir] = useState('asc');
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [addForm, setAddForm] = useState(initialForm);
+  const [isAdding, setIsAdding] = useState(false);
+  const [addStatus, setAddStatus] = useState({ type: '', message: '' });
+
   const [importFile, setImportFile] = useState(null);
   const [importMessage, setImportMessage] = useState('');
   const [importErrors, setImportErrors] = useState([]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [status, setStatus] = useState({ type: '', message: '' });
-  const [showForm, setShowForm] = useState(false);
+  const [showImport, setShowImport] = useState(false);
 
-  const handleSubmit = useCallback(async (e) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    setStatus({ type: '', message: '' });
+  const [editMedicine, setEditMedicine] = useState(null);
+  const [editForm, setEditForm] = useState(initialEditForm);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editStatus, setEditStatus] = useState({ type: '', message: '' });
 
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const debouncedSearch = useDebounce(search, 150);
+
+  const loadMedicines = useCallback(async () => {
     try {
-      const response = await authFetch(`${API_URL}/medicines`, {
+      const res = await authFetch(`${API_URL}/medicines`);
+      if (res.ok) setMedicines(await res.json());
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const init = async () => {
+      try {
+        const res = await authFetch(`${API_URL}/medicines`);
+        if (!cancelled && res.ok) setMedicines(await res.json());
+      } catch (err) {
+        console.error(err);
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    };
+    init();
+    const unsub1 = subscribe(Events.MEDICINES_CHANGED, loadMedicines);
+    const unsub2 = subscribe(Events.SALE_COMPLETED, loadMedicines);
+    return () => { cancelled = true; unsub1(); unsub2(); };
+  }, [loadMedicines]);
+
+  const filtered = useMemo(() => {
+    const term = debouncedSearch.toLowerCase();
+    let list = medicines;
+    if (term) {
+      list = medicines.filter((m) =>
+        m.name.toLowerCase().includes(term) ||
+        (m.category || '').toLowerCase().includes(term)
+      );
+    }
+    const sorted = [...list];
+    sorted.sort((a, b) => {
+      let cmp;
+      switch (sortField) {
+        case 'name': cmp = a.name.localeCompare(b.name); break;
+        case 'category': cmp = (a.category || '').localeCompare(b.category || ''); break;
+        case 'quantity': cmp = (a.quantity ?? 0) - (b.quantity ?? 0); break;
+        case 'costPrice': cmp = Number(a.costPrice) - Number(b.costPrice); break;
+        case 'sellingPrice': cmp = Number(a.sellingPrice) - Number(b.sellingPrice); break;
+        default: cmp = a.name.localeCompare(b.name);
+      }
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+    return sorted;
+  }, [medicines, debouncedSearch, sortField, sortDir]);
+
+  const handleSort = useCallback((field) => {
+    setSortField((prev) => {
+      if (prev === field) {
+        setSortDir((d) => d === 'asc' ? 'desc' : 'asc');
+        return field;
+      }
+      setSortDir('asc');
+      return field;
+    });
+  }, []);
+
+  const handleAddSubmit = useCallback(async (e) => {
+    e.preventDefault();
+    setIsAdding(true);
+    setAddStatus({ type: '', message: '' });
+    try {
+      const res = await authFetch(`${API_URL}/medicines`, {
         method: 'POST',
         body: JSON.stringify({
-          name: form.name,
-          initialStock: String(form.initialStock || 0),
-          costPrice: String(form.costPrice),
-          sellingPrice: String(form.sellingPrice),
-          category: form.category,
+          name: addForm.name,
+          initialStock: String(addForm.initialStock || 0),
+          costPrice: String(addForm.costPrice),
+          sellingPrice: String(addForm.sellingPrice),
+          category: addForm.category,
         }),
       });
-
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload.message || 'Failed');
-      setStatus({ type: 'success', message: payload.message || 'Medicine saved successfully.' });
-      setForm(initialForm);
-      setShowForm(false);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Failed');
+      setAddStatus({ type: 'success', message: data.message || 'Medicine added successfully.' });
+      setAddForm(initialForm);
+      setShowAddForm(false);
       emit(Events.MEDICINES_CHANGED);
-    } catch (error) {
-      setStatus({ type: 'error', message: error.message || 'Failed to save medicine.' });
+    } catch (err) {
+      setAddStatus({ type: 'error', message: err.message });
     } finally {
-      setIsSubmitting(false);
+      setIsAdding(false);
     }
-  }, [form]);
+  }, [addForm]);
 
-  const handleImport = useCallback(async (e) => {
+  const handleImportSubmit = useCallback(async (e) => {
     e.preventDefault();
-    if (!importFile) {
-      setImportMessage('Please choose an Excel file first.');
-      return;
-    }
-
+    if (!importFile) { setImportMessage('Please choose an Excel file first.'); return; }
     setImportMessage('');
     setImportErrors([]);
     const formData = new FormData();
     formData.append('file', importFile);
-
     try {
-      const response = await authFetch(`${API_URL}/medicines/import`, {
-        method: 'POST',
-        body: formData,
-      });
-      const payload = await response.json();
-      const summary = payload.summary || {};
-
-      if (!response.ok && summary.totalRows === undefined) {
-        throw new Error(payload.message || 'Import failed');
-      }
-
+      const res = await authFetch(`${API_URL}/medicines/import`, { method: 'POST', body: formData });
+      const data = await res.json();
+      const s = data.summary || {};
+      if (!res.ok && s.totalRows === undefined) throw new Error(data.message || 'Import failed');
       const parts = [];
       parts.push('Import completed.');
-      parts.push(`Rows Processed: ${summary.totalRows || 0}`);
-      parts.push(`New Medicines: ${summary.created || 0}`);
-      parts.push(`Updated Medicines: ${summary.updated || 0}`);
-      parts.push(`Total Units Added: ${summary.totalUnitsAdded || 0}`);
-      parts.push(`Failed Rows: ${summary.failedRows || 0}`);
-
+      parts.push(`Rows Processed: ${s.totalRows || 0}`);
+      parts.push(`New Medicines: ${s.created || 0}`);
+      parts.push(`Updated Medicines: ${s.updated || 0}`);
+      parts.push(`Total Units Added: ${s.totalUnitsAdded || 0}`);
+      parts.push(`Failed Rows: ${s.failedRows || 0}`);
       setImportMessage(parts.join('\n'));
-      setImportErrors(summary.errors || []);
+      setImportErrors(s.errors || []);
       setImportFile(null);
       emit(Events.MEDICINES_CHANGED);
-    } catch (error) {
-      setImportMessage(error.message || 'Import failed');
-      setImportErrors([]);
+    } catch (err) {
+      setImportMessage(err.message || 'Import failed');
     }
   }, [importFile]);
 
   const handleDownloadSample = useCallback(async () => {
     try {
-      const response = await authFetch(`${API_URL}/medicines/sample-excel`);
-      if (!response.ok) throw new Error('Failed to download sample');
-      const blob = await response.blob();
+      const res = await authFetch(`${API_URL}/medicines/sample-excel`);
+      if (!res.ok) throw new Error('Failed to download');
+      const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -106,80 +191,306 @@ function MedicineManagement() {
       a.click();
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error('Download sample error:', error);
-    }
+    } catch (err) { console.error(err); }
   }, []);
+
+  const openEdit = useCallback((medicine) => {
+    setEditMedicine(medicine);
+    setEditForm({
+      name: medicine.name,
+      costPrice: String(Number(medicine.costPrice)),
+      sellingPrice: String(Number(medicine.sellingPrice)),
+      category: medicine.category,
+    });
+    setEditStatus({ type: '', message: '' });
+  }, []);
+
+  const closeEdit = useCallback(() => {
+    setEditMedicine(null);
+    setEditForm(initialEditForm);
+    setEditStatus({ type: '', message: '' });
+  }, []);
+
+  const handleEditSubmit = useCallback(async (e) => {
+    e.preventDefault();
+    if (!editMedicine) return;
+    setIsEditing(true);
+    setEditStatus({ type: '', message: '' });
+    try {
+      const res = await authFetch(`${API_URL}/medicines/${editMedicine.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          name: editForm.name,
+          costPrice: Number(editForm.costPrice),
+          sellingPrice: Number(editForm.sellingPrice),
+          category: editForm.category,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Update failed');
+      setEditStatus({ type: 'success', message: 'Medicine updated successfully.' });
+      setMedicines((prev) => prev.map((m) => m.id === editMedicine.id ? { ...m, ...data } : m));
+      emit(Events.MEDICINES_CHANGED);
+      setTimeout(closeEdit, 800);
+    } catch (err) {
+      setEditStatus({ type: 'error', message: err.message });
+    } finally {
+      setIsEditing(false);
+    }
+  }, [editMedicine, editForm, closeEdit]);
+
+  const confirmDelete = useCallback((medicine) => {
+    setDeleteTarget(medicine);
+  }, []);
+
+  const handleDelete = useCallback(async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    try {
+      const res = await authFetch(`${API_URL}/medicines/${deleteTarget.id}`, { method: 'DELETE' });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.message || 'Delete failed'); }
+      setMedicines((prev) => prev.filter((m) => m.id !== deleteTarget.id));
+      setDeleteTarget(null);
+      emit(Events.MEDICINES_CHANGED);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsDeleting(false);
+    }
+  }, [deleteTarget]);
 
   return (
     <div className="medicine-page">
       <div className="page-header">
         <div>
           <p className="eyebrow">Inventory</p>
-          <h2>Medicine Management</h2>
+          <h1>Medicines</h1>
         </div>
         <div className="topbar-actions">
-          <button className="primary-btn" type="button" onClick={() => setShowForm((prev) => !prev)}>
-            {showForm ? 'Close Form' : '+ Add Medicine'}
+          <button className="primary-btn" type="button" onClick={() => setShowAddForm((p) => !p)}>
+            {showAddForm ? 'Close' : '+ Add Medicine'}
+          </button>
+          <button className="ghost-btn" type="button" onClick={() => setShowImport((p) => !p)}>
+            Upload Excel
+          </button>
+          <button className="ghost-btn" type="button" onClick={handleDownloadSample}>
+            Download Sample Excel
           </button>
         </div>
       </div>
 
-      {status.message && (
-        <div className={`status-banner ${status.type === 'error' ? 'error-banner' : 'success-banner'}`}>
-          {status.message}
+      {addStatus.message && (
+        <div className={`status-banner ${addStatus.type === 'error' ? 'error-banner' : 'success-banner'}`}>
+          {addStatus.message}
         </div>
       )}
 
-      {showForm && (
+      {showAddForm && (
         <div className="panel">
-          <div className="panel-header">
-            <h3>Add New Medicine</h3>
-          </div>
-          <form className="medicine-form" onSubmit={handleSubmit}>
+          <div className="panel-header"><h3>Add New Medicine</h3></div>
+          <form className="medicine-form" onSubmit={handleAddSubmit}>
             <div className="form-grid">
-              <input placeholder="Medicine Name *" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-              <input placeholder="Initial Stock" type="number" min="0" value={form.initialStock} onChange={(e) => setForm({ ...form, initialStock: e.target.value })} />
-              <input placeholder="Cost Price (KES) *" type="number" min="0" step="0.01" value={form.costPrice} onChange={(e) => setForm({ ...form, costPrice: e.target.value })} required />
-              <input placeholder="Selling Price (KES) *" type="number" min="0" step="0.01" value={form.sellingPrice} onChange={(e) => setForm({ ...form, sellingPrice: e.target.value })} required />
-              <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} required>
-                {CATEGORIES.map((cat) => <option key={cat} value={cat}>{cat}</option>)}
+              <input placeholder="Medicine Name *" value={addForm.name} onChange={(e) => setAddForm({ ...addForm, name: e.target.value })} required />
+              <input placeholder="Initial Stock" type="number" min="0" value={addForm.initialStock} onChange={(e) => setAddForm({ ...addForm, initialStock: e.target.value })} />
+              <input placeholder="Cost Price (KES) *" type="number" min="0" step="0.01" value={addForm.costPrice} onChange={(e) => setAddForm({ ...addForm, costPrice: e.target.value })} required />
+              <input placeholder="Selling Price (KES) *" type="number" min="0" step="0.01" value={addForm.sellingPrice} onChange={(e) => setAddForm({ ...addForm, sellingPrice: e.target.value })} required />
+              <select value={addForm.category} onChange={(e) => setAddForm({ ...addForm, category: e.target.value })} required>
+                {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
-            <button className="primary-btn" type="submit" disabled={isSubmitting}>
-              {isSubmitting ? 'Saving...' : 'Save Medicine'}
+            <button className="primary-btn" type="submit" disabled={isAdding}>
+              {isAdding ? 'Saving...' : 'Save Medicine'}
             </button>
+          </form>
+        </div>
+      )}
+
+      {showImport && (
+        <div className="panel">
+          <div className="panel-header"><h3>Excel Import</h3></div>
+          <form className="medicine-form" onSubmit={handleImportSubmit}>
+            <div className="form-grid">
+              <input type="file" accept=".xlsx,.xls" onChange={(e) => setImportFile(e.target.files?.[0] || null)} />
+            </div>
+            <button className="primary-btn" type="submit">Upload</button>
+            {importMessage && <pre className="import-summary">{importMessage}</pre>}
+            {importErrors.length > 0 && (
+              <div className="import-errors">
+                <strong>Errors:</strong>
+                <ul>{importErrors.map((err, i) => <li key={i}>Row {err.row}: {err.message}</li>)}</ul>
+              </div>
+            )}
           </form>
         </div>
       )}
 
       <div className="panel">
         <div className="panel-header">
-          <h3>Excel Import</h3>
+          <h3>All Medicines ({filtered.length})</h3>
+          <input
+            className="search-input"
+            placeholder="Search by name or category..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
         </div>
-        <form className="medicine-form" onSubmit={handleImport}>
-          <div className="form-grid">
-            <input type="file" accept=".xlsx,.xls" onChange={(e) => setImportFile(e.target.files?.[0] || null)} />
+
+        {isLoading ? (
+          <div className="loading-state">Loading medicines...</div>
+        ) : filtered.length === 0 ? (
+          <div className="empty-state-full">
+            {search ? 'No medicines match your search.' : 'No medicines found. Add one to get started.'}
           </div>
-          <div className="topbar-actions">
-            <button className="primary-btn" type="submit">Upload Excel</button>
-            <button className="ghost-btn" type="button" onClick={handleDownloadSample}>Download Sample Excel</button>
-          </div>
-          {importMessage && <pre className="import-summary">{importMessage}</pre>}
-          {importErrors.length > 0 && (
-            <div className="import-errors">
-              <strong>Errors:</strong>
-              <ul>
-                {importErrors.map((err, idx) => (
-                  <li key={idx}>Row {err.row}: {err.message}</li>
-                ))}
-              </ul>
+        ) : (
+          <>
+            <div className="table-responsive">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th className="sortable" onClick={() => handleSort('name')}>
+                      Medicine Name <SortIcon column="name" sortField={sortField} sortDir={sortDir} />
+                    </th>
+                    <th className="sortable" onClick={() => handleSort('category')}>
+                      Category <SortIcon column="category" sortField={sortField} sortDir={sortDir} />
+                    </th>
+                    <th className="sortable" onClick={() => handleSort('quantity')}>
+                      Stock <SortIcon column="quantity" sortField={sortField} sortDir={sortDir} />
+                    </th>
+                    <th className="sortable" onClick={() => handleSort('costPrice')}>
+                      Cost Price <SortIcon column="costPrice" sortField={sortField} sortDir={sortDir} />
+                    </th>
+                    <th className="sortable" onClick={() => handleSort('sellingPrice')}>
+                      Selling Price <SortIcon column="sellingPrice" sortField={sortField} sortDir={sortDir} />
+                    </th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((m) => {
+                    const status = getStockStatus(m.quantity ?? 0);
+                    return (
+                      <tr key={m.id}>
+                        <td data-label="Medicine" className="medicine-name-cell">{m.name}</td>
+                        <td data-label="Category"><span className="pill">{m.category}</span></td>
+                        <td data-label="Stock">{m.quantity ?? 0}</td>
+                        <td data-label="Cost Price">{formatCurrency(Number(m.costPrice))}</td>
+                        <td data-label="Selling Price">{formatCurrency(Number(m.sellingPrice))}</td>
+                        <td data-label="Status"><span className={`stock-badge ${status.className}`}>{status.label}</span></td>
+                        <td data-label="Actions" className="actions-cell">
+                          <button className="icon-btn edit-btn" type="button" title="Edit" onClick={() => openEdit(m)}>
+                            &#9998;
+                          </button>
+                          <button className="icon-btn delete-btn" type="button" title="Delete" onClick={() => confirmDelete(m)}>
+                            &#128465;
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
-          )}
-        </form>
+
+            <div className="medicine-cards-mobile">
+              {filtered.map((m) => {
+                const status = getStockStatus(m.quantity ?? 0);
+                return (
+                  <div className="medicine-mobile-card" key={m.id}>
+                    <div className="mobile-card-header">
+                      <strong>{m.name}</strong>
+                      <span className={`stock-badge ${status.className}`}>{status.label}</span>
+                    </div>
+                    <div className="mobile-card-body">
+                      <div className="mobile-card-row"><span>Category</span><span className="pill">{m.category}</span></div>
+                      <div className="mobile-card-row"><span>Stock</span><span>{m.quantity ?? 0}</span></div>
+                      <div className="mobile-card-row"><span>Cost Price</span><span>{formatCurrency(Number(m.costPrice))}</span></div>
+                      <div className="mobile-card-row"><span>Selling Price</span><span>{formatCurrency(Number(m.sellingPrice))}</span></div>
+                    </div>
+                    <div className="mobile-card-actions">
+                      <button className="ghost-btn small-btn" type="button" onClick={() => openEdit(m)}>&#9998; Edit</button>
+                      <button className="ghost-btn small-btn danger-btn" type="button" onClick={() => confirmDelete(m)}>&#128465; Delete</button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
       </div>
+
+      {editMedicine && (
+        <div className="modal-overlay" onClick={closeEdit}>
+          <div className="modal-panel" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Edit Medicine</h3>
+              <button className="ghost-btn small-btn" type="button" onClick={closeEdit}>&times;</button>
+            </div>
+            {editStatus.message && (
+              <div className={`status-banner ${editStatus.type === 'error' ? 'error-banner' : 'success-banner'}`}>
+                {editStatus.message}
+              </div>
+            )}
+            <form className="modal-form" onSubmit={handleEditSubmit}>
+              <div className="form-grid">
+                <div className="form-field">
+                  <label>Medicine Name</label>
+                  <input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} required />
+                </div>
+                <div className="form-field">
+                  <label>Category</label>
+                  <select value={editForm.category} onChange={(e) => setEditForm({ ...editForm, category: e.target.value })} required>
+                    {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div className="form-field">
+                  <label>Cost Price (KES)</label>
+                  <input type="number" min="0" step="0.01" value={editForm.costPrice} onChange={(e) => setEditForm({ ...editForm, costPrice: e.target.value })} required />
+                </div>
+                <div className="form-field">
+                  <label>Selling Price (KES)</label>
+                  <input type="number" min="0" step="0.01" value={editForm.sellingPrice} onChange={(e) => setEditForm({ ...editForm, sellingPrice: e.target.value })} required />
+                </div>
+              </div>
+              <div className="modal-actions">
+                <button className="ghost-btn" type="button" onClick={closeEdit}>Cancel</button>
+                <button className="primary-btn" type="submit" disabled={isEditing}>
+                  {isEditing ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {deleteTarget && (
+        <div className="modal-overlay" onClick={() => setDeleteTarget(null)}>
+          <div className="modal-panel modal-confirm" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Delete Medicine</h3>
+            </div>
+            <p className="modal-body-text">
+              Are you sure you want to delete <strong>{deleteTarget.name}</strong>? This action cannot be undone.
+            </p>
+            <div className="modal-actions">
+              <button className="ghost-btn" type="button" onClick={() => setDeleteTarget(null)}>Cancel</button>
+              <button className="primary-btn danger-btn" type="button" disabled={isDeleting} onClick={handleDelete}>
+                {isDeleting ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
+}
+
+function formatCurrency(value) {
+  return new Intl.NumberFormat('en-KE', {
+    style: 'currency',
+    currency: 'KES',
+    maximumFractionDigits: 0,
+  }).format(value ?? 0);
 }
 
 export default memo(MedicineManagement);

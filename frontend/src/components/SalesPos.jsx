@@ -1,5 +1,4 @@
 import { useEffect, useState, useMemo, useCallback, memo } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { authFetch, API_URL } from '../api';
 import { useDebounce } from '../hooks/useDebounce';
 import { subscribe, Events } from '../store';
@@ -58,7 +57,6 @@ const CartItem = memo(function CartItem({ item, onUpdateQuantity, onRemove }) {
 });
 
 function SalesPos({ onSaleComplete }) {
-  const navigate = useNavigate();
   const [medicines, setMedicines] = useState([]);
   const [cart, setCart] = useState([]);
   const [paymentMethod, setPaymentMethod] = useState('CASH');
@@ -272,15 +270,10 @@ function SalesPos({ onSaleComplete }) {
 
   return (
     <div className="pos-shell">
-      <div className="pos-toolbar">
+      <div className="topbar">
         <div>
           <p className="eyebrow">Point of Sale</p>
-          <h2>Pharmacy POS</h2>
-        </div>
-        <div className="topbar-actions">
-          <button className="ghost-btn" type="button" onClick={() => navigate('/')}>
-            &larr; Back
-          </button>
+          <h1>POS</h1>
         </div>
       </div>
 

@@ -21,16 +21,6 @@ const timeAgo = (dateString) => {
   return `${days}d ago`;
 };
 
-const ActivityItem = memo(function ActivityItem({ item }) {
-  return (
-    <li key={item.id}>
-      <strong>{item.title}</strong>
-      <span>{item.detail}</span>
-      <small>{formatCurrency(item.amount)} &middot; {timeAgo(item.time)}</small>
-    </li>
-  );
-});
-
 const NotificationItem = memo(function NotificationItem({ n }) {
   return (
     <li key={n.id}>
@@ -53,7 +43,6 @@ function HomePage() {
     outOfStock: 0,
     inventoryValue: 0,
   });
-  const [recentActivity, setRecentActivity] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [recentReceipts, setRecentReceipts] = useState([]);
 
@@ -79,7 +68,6 @@ function HomePage() {
             outOfStock: d.outOfStock ?? 0,
             inventoryValue: d.inventoryValue ?? 0,
           });
-          setRecentActivity(d.recentActivity ?? []);
         } else {
           console.error('[Dashboard] Failed to load stats:', dashRes.status);
         }
@@ -104,9 +92,8 @@ function HomePage() {
 
   const handleNewSale = useCallback(() => navigate('/sales'), [navigate]);
   const handleManageMedicines = useCallback(() => navigate('/medicines'), [navigate]);
-  const handleViewSales = useCallback(() => navigate('/sales'), [navigate]);
-  const handleViewNotifications = useCallback(() => navigate('/notifications'), [navigate]);
   const handleViewReceipts = useCallback(() => navigate('/receipts'), [navigate]);
+  const handleViewNotifications = useCallback(() => navigate('/notifications'), [navigate]);
 
   return (
     <div className="home-page">
@@ -173,51 +160,29 @@ function HomePage() {
         </article>
       </section>
 
-      <div className="home-grid">
-        <article className="panel">
-          <div className="panel-header">
-            <h3>Quick Overview</h3>
+      <article className="panel">
+        <div className="panel-header">
+          <h3>Quick Overview</h3>
+        </div>
+        <div className="overview-grid">
+          <div className="overview-item">
+            <span className="overview-label">Total Medicines</span>
+            <span className="overview-value">{stats.totalMedicines}</span>
           </div>
-          <div className="overview-grid">
-            <div className="overview-item">
-              <span className="overview-label">Total Medicines</span>
-              <span className="overview-value">{stats.totalMedicines}</span>
-            </div>
-            <div className="overview-item">
-              <span className="overview-label">Total Stock Units</span>
-              <span className="overview-value">{stats.totalUnitsInStock}</span>
-            </div>
-            <div className="overview-item">
-              <span className="overview-label">Low Stock</span>
-              <span className="overview-value overview-warning">{stats.lowStock}</span>
-            </div>
-            <div className="overview-item">
-              <span className="overview-label">Out of Stock</span>
-              <span className="overview-value overview-danger">{stats.outOfStock}</span>
-            </div>
+          <div className="overview-item">
+            <span className="overview-label">Total Stock Units</span>
+            <span className="overview-value">{stats.totalUnitsInStock}</span>
           </div>
-        </article>
-
-        <article className="panel">
-          <div className="panel-header">
-            <h3>Recent Activity</h3>
-            <button className="ghost-btn small-btn" type="button" onClick={handleViewSales}>
-              View Sales
-            </button>
+          <div className="overview-item">
+            <span className="overview-label">Low Stock</span>
+            <span className="overview-value overview-warning">{stats.lowStock}</span>
           </div>
-          <ul className="activity-list">
-            {recentActivity.length > 0 ? (
-              recentActivity.map((item) => (
-                <ActivityItem key={item.id} item={item} />
-              ))
-            ) : (
-              <li className="empty-state">
-                <span>No sales recorded today yet.</span>
-              </li>
-            )}
-          </ul>
-        </article>
-      </div>
+          <div className="overview-item">
+            <span className="overview-label">Out of Stock</span>
+            <span className="overview-value overview-danger">{stats.outOfStock}</span>
+          </div>
+        </div>
+      </article>
 
       <article className="panel">
         <div className="panel-header">
