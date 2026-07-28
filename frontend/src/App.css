@@ -19,10 +19,11 @@ body {
 }
 
 .dashboard-shell {
-  min-height: 100vh;
+  height: 100vh;
   color: #f4f7fb;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 /* ===== AUTH PAGES ===== */
@@ -339,15 +340,7 @@ body {
 .main-content {
   flex: 1;
   padding: 28px;
-}
-
-.page-section {
-  scroll-margin-top: 90px;
-  margin-bottom: 40px;
-}
-
-.page-section:last-child {
-  margin-bottom: 0;
+  overflow-y: auto;
 }
 
 /* ===== HOME PAGE ===== */

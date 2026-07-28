@@ -1,4 +1,5 @@
 import { useEffect, useState, memo, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { authFetch, API_URL } from '../api';
 import { Events, subscribe } from '../store';
 
@@ -40,7 +41,8 @@ const NotificationItem = memo(function NotificationItem({ n }) {
   );
 });
 
-function HomePage({ onNavigate }) {
+function HomePage() {
+  const navigate = useNavigate();
   const [stats, setStats] = useState({
     todayRevenue: 0,
     todayTransactions: 0,
@@ -100,11 +102,11 @@ function HomePage({ onNavigate }) {
     return () => { cancelled = true; unsubSale(); unsubMed(); };
   }, []);
 
-  const handleNewSale = useCallback(() => onNavigate('sales'), [onNavigate]);
-  const handleManageMedicines = useCallback(() => onNavigate('medicines'), [onNavigate]);
-  const handleViewSales = useCallback(() => onNavigate('sales'), [onNavigate]);
-  const handleViewNotifications = useCallback(() => onNavigate('notifications'), [onNavigate]);
-  const handleViewReceipts = useCallback(() => onNavigate('receipts'), [onNavigate]);
+  const handleNewSale = useCallback(() => navigate('/sales'), [navigate]);
+  const handleManageMedicines = useCallback(() => navigate('/medicines'), [navigate]);
+  const handleViewSales = useCallback(() => navigate('/sales'), [navigate]);
+  const handleViewNotifications = useCallback(() => navigate('/notifications'), [navigate]);
+  const handleViewReceipts = useCallback(() => navigate('/receipts'), [navigate]);
 
   return (
     <div className="home-page">
