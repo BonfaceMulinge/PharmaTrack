@@ -239,25 +239,22 @@ function SalesPos({ onSaleComplete }) {
     }
     applyOptimisticBulkUpdate(updatesMap);
 
-    setCart([]);
-
     const payload = {
       totalAmount: total,
       discount: 0,
       tax: 0,
       paymentMethod,
       receiptNumber: finalReceipt,
-      items: snapshot.map((item) => {
-        const cartItem = cart.find((ci) => ci.medicineId === item.medicineId);
-        return {
-          medicineId: item.medicineId,
-          quantity: item.quantity,
-          unitPrice: cartItem.unitPrice,
-          totalAmount: item.quantity * cartItem.unitPrice,
-        };
-      }),
+      items: snapshot.map((item) => ({
+        medicineId: item.medicineId,
+        quantity: item.soldQuantity,
+        unitPrice: cart.find((ci) => ci.medicineId === item.medicineId).unitPrice,
+        totalAmount: item.soldQuantity * cart.find((ci) => ci.medicineId === item.medicineId).unitPrice,
+      })),
       payments: [{ amount: total, method: paymentMethod }],
     };
+
+    setCart([]);
 
     try {
       const response = await authFetch(`${API_URL}/sales`, {
