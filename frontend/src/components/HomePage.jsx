@@ -83,7 +83,7 @@ function HomePage() {
       const [dashRes, notifRes, receiptsRes] = await Promise.all([
         authFetch(`${API_URL}/dashboard`),
         authFetch(`${API_URL}/notifications`),
-        authFetch(`${API_URL}/receipts/recent?limit=10`),
+        authFetch(`${API_URL}/receipts/recent?limit=5`),
       ]);
       if (dashRes.ok) {
         const d = await dashRes.json();

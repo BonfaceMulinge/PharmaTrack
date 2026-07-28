@@ -38,16 +38,14 @@ const NotificationCard = memo(function NotificationCard({ notification, onDismis
 
   const handleClick = useCallback(() => {
     setRemoving(true);
-    setTimeout(() => {
-      onDismiss(notification.id);
-      onNavigate(config.route);
-    }, 300);
+    onDismiss(notification.id);
+    onNavigate(config.route);
   }, [notification.id, config.route, onDismiss, onNavigate]);
 
   const handleDismiss = useCallback((e) => {
     e.stopPropagation();
     setRemoving(true);
-    setTimeout(() => onDismiss(notification.id), 300);
+    onDismiss(notification.id);
   }, [notification.id, onDismiss]);
 
   return (
@@ -88,6 +86,8 @@ function NotificationsForecasting() {
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [toast, setToast] = useState('');
+
   useEffect(() => {
     initNotifications();
     const unsubList = onListChange((list) => {
@@ -96,6 +96,12 @@ function NotificationsForecasting() {
     });
     return unsubList;
   }, []);
+
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(''), 3000);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   const handleDismiss = useCallback((id) => {
     dismissNotification(id);
@@ -111,6 +117,8 @@ function NotificationsForecasting() {
 
   return (
     <div className="medicine-page">
+      {toast && <div className="status-banner error-banner">{toast}</div>}
+
       <div className="page-header">
         <div>
           <p className="eyebrow">Smart Operations</p>
@@ -136,8 +144,8 @@ function NotificationsForecasting() {
         ) : notifications.length === 0 ? (
           <div className="notif-empty">
             <div className="notif-empty-icon">🔔</div>
-            <p>All caught up!</p>
-            <span>No unread notifications.</span>
+            <p>No new notifications.</p>
+            <span>You&apos;re all caught up!</span>
           </div>
         ) : (
           <div className="notif-list">

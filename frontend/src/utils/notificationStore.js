@@ -4,8 +4,10 @@ import { playNotificationSound } from './notificationSound';
 
 const MAX_UNREAD = 20;
 const POLL_INTERVAL = 30000;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 let notifications = [];
+let dismissedIds = new Set();
 let badgeListeners = new Set();
 let listListeners = new Set();
 let pollTimer = null;
@@ -17,30 +19,40 @@ function emitBadge() {
 }
 
 function emitList() {
-  listListeners.forEach((cb) => cb([...notifications]));
+  const snapshot = [...notifications];
+  listListeners.forEach((cb) => cb(snapshot));
+}
+
+function notifyAll() {
+  emitBadge();
+  emitList();
 }
 
 function addNotification(notif) {
+  if (dismissedIds.has(notif.id)) return;
   if (notifications.some((n) => n.id === notif.id)) return;
   notifications = [notif, ...notifications].slice(0, MAX_UNREAD);
   playNotificationSound();
-  emitBadge();
-  emitList();
+  notifyAll();
 }
 
 export function dismissNotification(id) {
+  dismissedIds.add(id);
   notifications = notifications.filter((n) => n.id !== id);
-  emitBadge();
-  emitList();
-  authFetch(`${API_URL}/notifications/${id}/read`, { method: 'PATCH' }).catch(() => {});
+  notifyAll();
+
+  if (UUID_RE.test(id)) {
+    authFetch(`${API_URL}/notifications/${id}/read`, { method: 'PATCH' }).catch(() => {});
+  }
 }
 
 export function dismissAll() {
-  const ids = notifications.map((n) => n.id);
+  const serverIds = notifications.filter((n) => UUID_RE.test(n.id)).map((n) => n.id);
+  notifications.forEach((n) => dismissedIds.add(n.id));
   notifications = [];
-  emitBadge();
-  emitList();
-  if (ids.length > 0) {
+  notifyAll();
+
+  if (serverIds.length > 0) {
     authFetch(`${API_URL}/notifications/read-all`, { method: 'PATCH' }).catch(() => {});
   }
 }
@@ -51,11 +63,13 @@ export function getUnreadCount() {
 
 export function onBadgeChange(cb) {
   badgeListeners.add(cb);
+  cb(notifications.length);
   return () => badgeListeners.delete(cb);
 }
 
 export function onListChange(cb) {
   listListeners.add(cb);
+  cb([...notifications]);
   return () => listListeners.delete(cb);
 }
 
@@ -64,10 +78,7 @@ async function fetchServerNotifications() {
     const res = await authFetch(`${API_URL}/notifications`);
     if (!res.ok) return;
     const data = await res.json();
-    const existing = new Set(notifications.map((n) => n.id));
-    data.forEach((n) => {
-      if (!existing.has(n.id)) addNotification(n);
-    });
+    data.forEach((n) => addNotification(n));
   } catch {
     // silent
   }
@@ -91,7 +102,6 @@ function handleMedicinesChanged() {
     message: 'Medicine inventory has been modified.',
     createdAt: new Date().toISOString(),
   });
-  fetchServerNotifications();
 }
 
 function startPolling() {
