@@ -154,7 +154,57 @@ const createSale = async (req, res) => {
       return saleRecord;
     });
 
-    return res.status(201).json({ sale, receiptNumber: finalReceiptNumber, message: 'Sale completed successfully' });
+    // Fetch the created sale with items and medicine names for receipt
+    const fullSale = await prisma.sale.findUnique({
+      where: { id: sale.id },
+      include: {
+        items: { include: { medicine: { select: { name: true, category: true } } } },
+        payments: true,
+      },
+    });
+
+    // Build receipt items snapshot
+    const receiptItems = fullSale.items.map((item) => ({
+      medicineId: item.medicineId,
+      name: item.medicine.name,
+      category: item.medicine.category,
+      quantity: item.quantity,
+      unitPrice: Number(item.unitPrice),
+      subtotal: Number(item.totalAmount),
+      discount: Number(item.discount),
+    }));
+
+    const saleTotalAmount = Number(fullSale.totalAmount);
+    const saleDiscount = Number(fullSale.discount);
+    const saleTax = Number(fullSale.tax);
+    const subtotal = receiptItems.reduce((sum, item) => sum + item.subtotal, 0);
+    const totalPaid = fullSale.payments.reduce((sum, p) => sum + Number(p.amount), 0);
+    const balance = totalPaid - saleTotalAmount;
+
+    // Create receipt inside a separate write (after transaction)
+    const receipt = await prisma.receipt.create({
+      data: {
+        receiptNumber: finalReceiptNumber,
+        saleId: sale.id,
+        pharmacyId: req.pharmacyId,
+        userId: req.user.id,
+        amountPaid: totalPaid,
+        balance: Math.max(0, balance),
+        items: receiptItems,
+        subtotal,
+        discount: saleDiscount,
+        tax: saleTax,
+        totalAmount: saleTotalAmount,
+        paymentMethod,
+      },
+    });
+
+    return res.status(201).json({
+      sale: fullSale,
+      receipt,
+      receiptNumber: finalReceiptNumber,
+      message: 'Sale completed successfully',
+    });
   } catch (error) {
     if (error.statusCode === 400) {
       return res.status(400).json({ message: error.message });

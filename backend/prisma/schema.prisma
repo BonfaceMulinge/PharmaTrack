@@ -13,6 +13,9 @@ model Pharmacy {
   ownerName            String?
   email                String?
   phone                String?
+  address              String?
+  logo                 String?
+  licenseNumber        String?
   country              String?
   subscriptionStatus   SubscriptionStatus @default(ACTIVE)
   subscriptionStartDate DateTime?
@@ -23,6 +26,7 @@ model Pharmacy {
   users                User[]
   medicines            Medicine[]
   sales                Sale[]
+  receipts             Receipt[]
   stockMovements       StockMovement[]
   notifications        Notification[]
 
@@ -53,6 +57,7 @@ model User {
   pharmacy           Pharmacy?       @relation(fields: [pharmacyId], references: [id])
   auditLogs          AuditLog[]
   sales              Sale[]
+  receipts           Receipt[]
   stockMovements     StockMovement[]
 
   @@index([pharmacyId])
@@ -102,6 +107,7 @@ model Sale {
   user          User          @relation(fields: [userId], references: [id])
   items         SaleItem[]
   payments      Payment[]
+  receipt       Receipt?
 
   @@index([pharmacyId])
   @@index([pharmacyId, deletedAt])
@@ -203,6 +209,31 @@ model Notification {
   @@index([pharmacyId, deletedAt])
   @@index([pharmacyId, isRead])
   @@index([deletedAt])
+}
+
+model Receipt {
+  id              String        @id @default(uuid())
+  receiptNumber   String        @unique
+  saleId          String        @unique
+  pharmacyId      String
+  userId          String
+  amountPaid      Decimal
+  balance         Decimal       @default(0)
+  items           Json
+  subtotal        Decimal
+  discount        Decimal       @default(0)
+  tax             Decimal       @default(0)
+  totalAmount     Decimal
+  paymentMethod   PaymentMethod
+  createdAt       DateTime      @default(now())
+  sale            Sale          @relation(fields: [saleId], references: [id])
+  pharmacy        Pharmacy      @relation(fields: [pharmacyId], references: [id])
+  user            User          @relation(fields: [userId], references: [id])
+
+  @@index([pharmacyId])
+  @@index([pharmacyId, createdAt])
+  @@index([receiptNumber])
+  @@index([saleId])
 }
 
 enum UserRole {

@@ -53,14 +53,16 @@ function HomePage({ onNavigate }) {
   });
   const [recentActivity, setRecentActivity] = useState([]);
   const [notifications, setNotifications] = useState([]);
+  const [recentReceipts, setRecentReceipts] = useState([]);
 
   useEffect(() => {
     let cancelled = false;
     const loadData = async () => {
       try {
-        const [dashRes, notifRes] = await Promise.all([
+        const [dashRes, notifRes, receiptsRes] = await Promise.all([
           authFetch(`${API_URL}/dashboard`),
           authFetch(`${API_URL}/notifications`),
+          authFetch(`${API_URL}/receipts/recent?limit=10`),
         ]);
         if (cancelled) return;
         if (dashRes.ok) {
@@ -83,6 +85,10 @@ function HomePage({ onNavigate }) {
           const data = await notifRes.json();
           setNotifications(data.filter((n) => !n.isRead).slice(0, 5));
         }
+        if (receiptsRes.ok) {
+          const rData = await receiptsRes.json();
+          setRecentReceipts(rData.receipts || []);
+        }
       } catch (err) {
         console.error('[Dashboard] Load error:', err);
       }
@@ -98,6 +104,7 @@ function HomePage({ onNavigate }) {
   const handleManageMedicines = useCallback(() => onNavigate('medicines'), [onNavigate]);
   const handleViewSales = useCallback(() => onNavigate('sales'), [onNavigate]);
   const handleViewNotifications = useCallback(() => onNavigate('notifications'), [onNavigate]);
+  const handleViewReceipts = useCallback(() => onNavigate('receipts'), [onNavigate]);
 
   return (
     <div className="home-page">
@@ -209,6 +216,47 @@ function HomePage({ onNavigate }) {
           </ul>
         </article>
       </div>
+
+      <article className="panel">
+        <div className="panel-header">
+          <h3>Recent Receipts</h3>
+          <button className="ghost-btn small-btn" type="button" onClick={handleViewReceipts}>
+            View All
+          </button>
+        </div>
+        {recentReceipts.length > 0 ? (
+          <div className="table-responsive">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Receipt #</th>
+                  <th>Date</th>
+                  <th>Cashier</th>
+                  <th>Total</th>
+                  <th>Payment</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentReceipts.map((r) => (
+                  <tr key={r.id}>
+                    <td><strong>{r.receiptNumber}</strong></td>
+                    <td>{timeAgo(r.createdAt)}</td>
+                    <td>{r.user?.fullName || 'N/A'}</td>
+                    <td>{formatCurrency(r.totalAmount)}</td>
+                    <td><span className="pill">{(r.paymentMethod || '').replace('_', ' ')}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <ul className="activity-list">
+            <li className="empty-state">
+              <span>No receipts yet.</span>
+            </li>
+          </ul>
+        )}
+      </article>
 
       {notifications.length > 0 && (
         <article className="panel">

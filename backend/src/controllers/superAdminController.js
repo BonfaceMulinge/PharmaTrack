@@ -110,7 +110,7 @@ const getPharmacy = async (req, res) => {
 
 const createPharmacy = async (req, res) => {
   try {
-    const { name, ownerName, email, phone, country, password } = req.body;
+    const { name, ownerName, email, phone, country, address, logo, licenseNumber, password } = req.body;
 
     if (!name || !ownerName || !email || !password) {
       return res.status(400).json({ message: 'Name, owner name, email, and password are required' });
@@ -134,6 +134,9 @@ const createPharmacy = async (req, res) => {
           ownerName,
           email,
           phone: phone || null,
+          address: address || null,
+          logo: logo || null,
+          licenseNumber: licenseNumber || null,
           country: country || null,
           subscriptionStatus: 'ACTIVE',
           subscriptionStartDate: now,
@@ -166,6 +169,9 @@ const createPharmacy = async (req, res) => {
         ownerName: result.pharmacy.ownerName,
         email: result.pharmacy.email,
         phone: result.pharmacy.phone,
+        address: result.pharmacy.address,
+        logo: result.pharmacy.logo,
+        licenseNumber: result.pharmacy.licenseNumber,
         country: result.pharmacy.country,
         subscriptionStatus: result.pharmacy.subscriptionStatus,
         subscriptionStartDate: result.pharmacy.subscriptionStartDate,
@@ -183,7 +189,7 @@ const createPharmacy = async (req, res) => {
 const updatePharmacy = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, ownerName, email, phone, country } = req.body;
+    const { name, ownerName, email, phone, country, address, logo, licenseNumber } = req.body;
 
     const pharmacy = await prisma.pharmacy.findUnique({ where: { id } });
     if (!pharmacy) {
@@ -198,6 +204,9 @@ const updatePharmacy = async (req, res) => {
         ...(email && { email }),
         ...(phone !== undefined && { phone }),
         ...(country !== undefined && { country }),
+        ...(address !== undefined && { address }),
+        ...(logo !== undefined && { logo }),
+        ...(licenseNumber !== undefined && { licenseNumber }),
       },
     });
 

@@ -1,7 +1,8 @@
 import { useEffect, useState, useMemo, useCallback, memo } from 'react';
-import { authFetch, API_URL, getUser } from '../api';
+import { authFetch, API_URL } from '../api';
 import { useDebounce } from '../hooks/useDebounce';
 import { subscribe, Events } from '../store';
+import ReceiptModal from './ReceiptModal';
 
 const formatCurrency = (value) =>
   new Intl.NumberFormat('en-KE', {
@@ -55,27 +56,6 @@ const CartItem = memo(function CartItem({ item, onUpdateQuantity, onRemove }) {
   );
 });
 
-const Receipt = memo(function Receipt({ receipt }) {
-  return (
-    <div className="receipt-card">
-      <h4>Receipt</h4>
-      <p><strong>#{receipt.receiptNumber}</strong></p>
-      <p>{receipt.date}</p>
-      <p>Cashier: {receipt.cashierName}</p>
-      <ul>
-        {receipt.items.map((item) => (
-          <li key={item.medicineId}>
-            {item.name} x {item.quantity} &mdash; {formatCurrency(item.subtotal)}
-          </li>
-        ))}
-      </ul>
-      <p><strong>Total: {formatCurrency(receipt.total)}</strong></p>
-      <p>Payment: {receipt.paymentMethod}</p>
-      <button className="ghost-btn" type="button" onClick={() => window.print()}>Print Receipt</button>
-    </div>
-  );
-});
-
 function SalesPos({ onSaleComplete, onBackToDashboard }) {
   const [medicines, setMedicines] = useState([]);
   const [cart, setCart] = useState([]);
@@ -88,7 +68,8 @@ function SalesPos({ onSaleComplete, onBackToDashboard }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [receipt, setReceipt] = useState(null);
+  const [receiptData, setReceiptData] = useState(null);
+  const [pharmacyProfile, setPharmacyProfile] = useState(null);
 
   const debouncedSearch = useDebounce(searchTerm, 150);
 
@@ -110,10 +91,19 @@ function SalesPos({ onSaleComplete, onBackToDashboard }) {
     let cancelled = false;
     const init = async () => {
       try {
-        const response = await authFetch(`${API_URL}/medicines`);
-        if (cancelled || !response.ok) return;
-        const data = await response.json();
-        setMedicines(data.filter((medicine) => getCurrentStock(medicine) > 0));
+        const [medRes, profileRes] = await Promise.all([
+          authFetch(`${API_URL}/medicines`),
+          authFetch(`${API_URL}/receipts/pharmacy-profile`),
+        ]);
+        if (cancelled) return;
+        if (medRes.ok) {
+          const data = await medRes.json();
+          setMedicines(data.filter((medicine) => getCurrentStock(medicine) > 0));
+        }
+        if (profileRes.ok) {
+          const pData = await profileRes.json();
+          setPharmacyProfile(pData.pharmacy);
+        }
       } catch (err) {
         console.error(err);
         if (!cancelled) setError('Unable to load medicines right now.');
@@ -261,17 +251,7 @@ function SalesPos({ onSaleComplete, onBackToDashboard }) {
       const result = await response.json();
       if (!response.ok) throw new Error(result.message || 'Sale failed');
 
-      const user = getUser();
-      const receiptData = {
-        receiptNumber: result.receiptNumber || finalReceipt,
-        cashierName: user?.fullName || 'Cashier',
-        paymentMethod,
-        date: new Date().toLocaleString('en-KE'),
-        items: cart.map((item) => ({ ...item, subtotal: item.quantity * item.unitPrice })),
-        total,
-      };
-
-      setReceipt(receiptData);
+      setReceiptData(result.receipt || null);
       setSuccess(result.message || 'Sale completed successfully');
       if (onSaleComplete) onSaleComplete();
       setCart([]);
@@ -379,7 +359,9 @@ function SalesPos({ onSaleComplete, onBackToDashboard }) {
             </div>
           </form>
 
-          {receipt && <Receipt receipt={receipt} />}
+          {receiptData && (
+            <ReceiptModal receipt={receiptData} pharmacy={pharmacyProfile} onClose={() => setReceiptData(null)} />
+          )}
         </aside>
       </div>
     </div>

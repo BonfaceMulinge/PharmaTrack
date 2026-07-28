@@ -24,7 +24,7 @@ const authenticate = async (req, res, next) => {
         mustChangePassword: true,
         isActive: true,
         pharmacyId: true,
-        pharmacy: { select: { id: true, name: true, subscriptionStatus: true, subscriptionExpiryDate: true } },
+        pharmacy: { select: { id: true, name: true, email: true, phone: true, address: true, logo: true, licenseNumber: true, subscriptionStatus: true, subscriptionExpiryDate: true } },
       },
     });
     if (!user || !user.isActive) {
