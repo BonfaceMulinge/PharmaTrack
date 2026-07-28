@@ -2150,53 +2150,6 @@ code {
   padding: 40px;
 }
 
-.notif-badge {
-  position: absolute;
-  top: -6px;
-  right: -6px;
-  min-width: 18px;
-  height: 18px;
-  background: #ef4444;
-  color: white;
-  font-size: 0.65rem;
-  font-weight: 700;
-  border-radius: 999px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 4px;
-  line-height: 1;
-  border: 2px solid #07111f;
-  animation: notifBadgePop 0.3s ease-out;
-}
-
-.nav-bell-wrapper {
-  display: flex;
-  align-items: center;
-}
-
-.nav-bell-link {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  color: #8ca0bb;
-  transition: background 0.2s, color 0.2s;
-  text-decoration: none;
-}
-
-.nav-bell-link:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #f8fafc;
-}
-
-.nav-bell-link.active {
-  color: #5eead4;
-}
-
 @keyframes notifSlideIn {
   from {
     opacity: 0;
@@ -2208,17 +2161,7 @@ code {
   }
 }
 
-@keyframes notifBadgePop {
-  0% { transform: scale(0); }
-  60% { transform: scale(1.3); }
-  100% { transform: scale(1); }
-}
-
 @media (max-width: 768px) {
-  .nav-bell-wrapper {
-    display: none;
-  }
-
   .notif-card {
     padding: 12px;
   }

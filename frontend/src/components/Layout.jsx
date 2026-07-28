@@ -1,6 +1,6 @@
 import { useState, useEffect, memo } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { onBadgeChange, initNotifications } from '../utils/notificationStore';
+import { initNotifications } from '../utils/notificationStore';
 import { STATIC_URL } from '../api';
 
 const navItems = [
@@ -23,12 +23,9 @@ export function PageLoader() {
 
 function Layout({ user, onLogout }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     initNotifications();
-    const unsub = onBadgeChange(setUnreadCount);
-    return unsub;
   }, []);
 
   const logoUrl = user?.pharmacyLogo ? `${STATIC_URL}${user.pharmacyLogo}` : null;
@@ -68,13 +65,6 @@ function Layout({ user, onLogout }) {
             </NavLink>
           ))}
         </nav>
-
-        <div className="nav-bell-wrapper">
-          <NavLink to="/notifications" className="nav-bell-link" onClick={() => setMenuOpen(false)}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
-            {unreadCount > 0 && <span className="notif-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>}
-          </NavLink>
-        </div>
 
         <div className="nav-user">
           <div className="nav-user-info">
