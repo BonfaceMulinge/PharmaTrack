@@ -2,7 +2,6 @@ import { useState, useEffect, memo } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { initNotifications } from '../utils/notificationStore';
 import { STATIC_URL } from '../api';
-import InstallPrompt from './InstallPrompt';
 import InstallButton from './InstallButton';
 
 const navItems = [
@@ -83,8 +82,6 @@ function Layout({ user, onLogout }) {
       <main className="main-content">
         <Outlet />
       </main>
-
-      <InstallPrompt />
     </div>
   );
 }
