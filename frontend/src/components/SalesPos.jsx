@@ -223,7 +223,7 @@ function SalesPos({ onSaleComplete }) {
     setError('');
     setSuccess('');
 
-    const finalReceipt = receiptNumber || `RCPT-${crypto.randomUUID().slice(0, 8)}`;
+    const finalReceipt = receiptNumber || '';
 
     const snapshot = cart.map((item) => ({
       medicineId: item.medicineId,
