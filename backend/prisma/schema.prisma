@@ -94,6 +94,7 @@ model Sale {
   id            String        @id @default(uuid())
   pharmacyId    String
   userId        String
+  cashierName   String?
   saleDate      DateTime      @default(now())
   totalAmount   Decimal
   discount      Decimal       @default(0)

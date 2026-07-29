@@ -146,7 +146,7 @@ function ReceiptHistory() {
                   <tr key={r.id}>
                     <td><strong>{r.receiptNumber}</strong></td>
                     <td>{new Date(r.createdAt).toLocaleDateString('en-KE')}</td>
-                    <td>{r.user?.fullName || 'N/A'}</td>
+                    <td>{r.sale?.cashierName || r.user?.fullName || 'N/A'}</td>
                     <td>{formatCurrency(r.totalAmount)}</td>
                     <td>{formatCurrency(r.amountPaid)}</td>
                     <td>{formatCurrency(r.balance)}</td>

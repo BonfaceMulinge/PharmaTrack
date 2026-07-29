@@ -63,11 +63,18 @@ const createSale = async (req, res) => {
 
     const finalReceiptNumber = receiptNumber || `RCPT-${Date.now()}`;
 
+    const pharmacy = await prisma.pharmacy.findUnique({
+      where: { id: req.pharmacyId },
+      select: { cashierName: true },
+    });
+    const cashierName = pharmacy?.cashierName || null;
+
     const sale = await prisma.$transaction(async (tx) => {
       const saleRecord = await tx.sale.create({
         data: {
           pharmacyId: req.pharmacyId,
           userId: req.user.id,
+          cashierName,
           totalAmount: parseFloat(totalAmount || normalizedItems.reduce((sum, item) => sum + item.totalAmount, 0)),
           discount: parseFloat(discount || 0),
           tax: parseFloat(tax || 0),

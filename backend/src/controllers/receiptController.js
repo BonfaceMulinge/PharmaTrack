@@ -85,7 +85,7 @@ const getReceipts = async (req, res) => {
           totalAmount: true,
           paymentMethod: true,
           createdAt: true,
-          sale: { select: { id: true, status: true } },
+          sale: { select: { id: true, status: true, cashierName: true } },
           user: { select: { id: true, fullName: true, email: true } },
         },
         orderBy: { createdAt: 'desc' },
@@ -115,6 +115,7 @@ const getReceipt = async (req, res) => {
           select: {
             id: true,
             saleDate: true,
+            cashierName: true,
             status: true,
             items: {
               select: {
@@ -170,6 +171,7 @@ const getRecentReceipts = async (req, res) => {
         amountPaid: true,
         balance: true,
         createdAt: true,
+        sale: { select: { cashierName: true } },
         user: { select: { fullName: true } },
       },
       orderBy: { createdAt: 'desc' },

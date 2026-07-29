@@ -246,49 +246,53 @@ function MedicineManagement() {
     setEditStatus({ type: '', message: '' });
   }, []);
 
-  const handleEditSubmit = useCallback(async (e) => {
+  const guardedEditSubmit = useCallback((e) => {
     e.preventDefault();
     if (!editMedicine) return;
-    setIsEditing(true);
-    setEditStatus({ type: '', message: '' });
+    pinGuard.guard(() => {
+      setIsEditing(true);
+      setEditStatus({ type: '', message: '' });
 
-    const optimisticData = {
-      name: editForm.name,
-      costPrice: Number(editForm.costPrice),
-      sellingPrice: Number(editForm.sellingPrice),
-      category: editForm.category,
-    };
-    applyOptimisticUpdate(editMedicine.id, optimisticData);
+      const optimisticData = {
+        name: editForm.name,
+        costPrice: Number(editForm.costPrice),
+        sellingPrice: Number(editForm.sellingPrice),
+        category: editForm.category,
+      };
+      applyOptimisticUpdate(editMedicine.id, optimisticData);
 
-    try {
-      const res = await authFetch(`${API_URL}/medicines/${editMedicine.id}`, {
-        method: 'PUT',
-        body: JSON.stringify({
-          name: editForm.name,
-          costPrice: Number(editForm.costPrice),
-          sellingPrice: Number(editForm.sellingPrice),
-          category: editForm.category,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        applyOptimisticUpdate(editMedicine.id, {
-          name: editMedicine.name,
-          costPrice: Number(editMedicine.costPrice),
-          sellingPrice: Number(editMedicine.sellingPrice),
-          category: editMedicine.category,
-        });
-        throw new Error(data.message || 'Update failed');
-      }
-      if (data) applyOptimisticUpdate(editMedicine.id, data);
-      emit(Events.MEDICINES_CHANGED);
-      closeEdit();
-    } catch (err) {
-      setEditStatus({ type: 'error', message: err.message });
-    } finally {
-      setIsEditing(false);
-    }
-  }, [editMedicine, editForm, closeEdit]);
+      (async () => {
+        try {
+          const res = await authFetch(`${API_URL}/medicines/${editMedicine.id}`, {
+            method: 'PUT',
+            body: JSON.stringify({
+              name: editForm.name,
+              costPrice: Number(editForm.costPrice),
+              sellingPrice: Number(editForm.sellingPrice),
+              category: editForm.category,
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            applyOptimisticUpdate(editMedicine.id, {
+              name: editMedicine.name,
+              costPrice: Number(editMedicine.costPrice),
+              sellingPrice: Number(editMedicine.sellingPrice),
+              category: editMedicine.category,
+            });
+            throw new Error(data.message || 'Update failed');
+          }
+          if (data) applyOptimisticUpdate(editMedicine.id, data);
+          emit(Events.MEDICINES_CHANGED);
+          closeEdit();
+        } catch (err) {
+          setEditStatus({ type: 'error', message: err.message });
+        } finally {
+          setIsEditing(false);
+        }
+      })();
+    });
+  }, [pinGuard, editMedicine, editForm, closeEdit]);
 
   const confirmDelete = useCallback((medicine) => {
     setDeleteTarget(medicine);
@@ -313,6 +317,10 @@ function MedicineManagement() {
       setIsDeleting(false);
     }
   }, [deleteTarget]);
+
+  const guardedDelete = useCallback(() => {
+    pinGuard.guard(handleDelete);
+  }, [pinGuard, handleDelete]);
 
   return (
     <div className="medicine-page">
@@ -435,10 +443,10 @@ function MedicineManagement() {
                         <td data-label="Selling Price">{formatCurrency(Number(m.sellingPrice))}</td>
                         <td data-label="Status"><span className={`stock-badge ${status.className}`}>{status.label}</span></td>
                         <td data-label="Actions" className="actions-cell">
-                          <button className="icon-btn edit-btn" type="button" title="Edit" onClick={() => pinGuard.guard(() => openEdit(m))}>
+                          <button className="icon-btn edit-btn" type="button" title="Edit" onClick={() => openEdit(m)}>
                             &#9998;
                           </button>
-                          <button className="icon-btn delete-btn" type="button" title="Delete" onClick={() => pinGuard.guard(() => confirmDelete(m))}>
+                          <button className="icon-btn delete-btn" type="button" title="Delete" onClick={() => confirmDelete(m)}>
                             &#128465;
                           </button>
                         </td>
@@ -465,8 +473,8 @@ function MedicineManagement() {
                       <div className="mobile-card-row"><span>Selling Price</span><span>{formatCurrency(Number(m.sellingPrice))}</span></div>
                     </div>
                     <div className="mobile-card-actions">
-                      <button className="ghost-btn small-btn" type="button" onClick={() => pinGuard.guard(() => openEdit(m))}>&#9998; Edit</button>
-                      <button className="ghost-btn small-btn danger-btn" type="button" onClick={() => pinGuard.guard(() => confirmDelete(m))}>&#128465; Delete</button>
+                      <button className="ghost-btn small-btn" type="button" onClick={() => openEdit(m)}>&#9998; Edit</button>
+                      <button className="ghost-btn small-btn danger-btn" type="button" onClick={() => confirmDelete(m)}>&#128465; Delete</button>
                     </div>
                   </div>
                 );
@@ -488,7 +496,7 @@ function MedicineManagement() {
                 {editStatus.message}
               </div>
             )}
-            <form className="modal-form" onSubmit={handleEditSubmit}>
+            <form className="modal-form" onSubmit={guardedEditSubmit}>
               <div className="form-grid">
                 <div className="form-field">
                   <label>Medicine Name</label>
@@ -531,7 +539,7 @@ function MedicineManagement() {
             </p>
             <div className="modal-actions">
               <button className="ghost-btn" type="button" onClick={() => setDeleteTarget(null)}>Cancel</button>
-              <button className="primary-btn danger-btn" type="button" disabled={isDeleting} onClick={handleDelete}>
+              <button className="primary-btn danger-btn" type="button" disabled={isDeleting} onClick={guardedDelete}>
                 {isDeleting ? 'Deleting...' : 'Delete'}
               </button>
             </div>
