@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
+import { getDeferredPrompt, setDeferredPrompt, clearDeferredPrompt } from '../utils/installState';
 
 function InstallPrompt() {
-  const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [showPrompt, setShowPrompt] = useState(false);
 
   useEffect(() => {
@@ -15,18 +15,18 @@ function InstallPrompt() {
   }, []);
 
   const handleInstall = useCallback(async () => {
-    if (!deferredPrompt) return;
-    deferredPrompt.prompt();
-    const result = await deferredPrompt.userChoice;
+    const prompt = getDeferredPrompt();
+    if (!prompt) return;
+    prompt.prompt();
+    const result = await prompt.userChoice;
     if (result.outcome === 'accepted') {
       setShowPrompt(false);
     }
-    setDeferredPrompt(null);
-  }, [deferredPrompt]);
+    clearDeferredPrompt();
+  }, []);
 
   const handleDismiss = useCallback(() => {
     setShowPrompt(false);
-    setDeferredPrompt(null);
   }, []);
 
   if (!showPrompt) return null;
