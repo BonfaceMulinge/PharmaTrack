@@ -194,6 +194,9 @@ const createSale = async (req, res) => {
           totalAmount: saleTotalAmount,
           paymentMethod,
         },
+        include: {
+          sale: { select: { cashierName: true } },
+        },
       });
 
       return { saleRecord, receiptItems, receipt };
