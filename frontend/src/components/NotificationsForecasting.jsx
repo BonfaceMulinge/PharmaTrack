@@ -6,6 +6,8 @@ import {
   dismissAll,
   initNotifications,
 } from '../utils/notificationStore';
+import { usePinGuard } from '../utils/pinSession';
+import PinModal from './PinModal';
 
 const TYPE_CONFIG = {
   SALE_COMPLETED: { icon: '💰', color: '#22c55e', route: '/sales' },
@@ -88,6 +90,8 @@ function NotificationsForecasting() {
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState('');
 
+  const pinGuard = usePinGuard();
+
   useEffect(() => {
     initNotifications();
     const unsubList = onListChange((list) => {
@@ -108,8 +112,8 @@ function NotificationsForecasting() {
   }, []);
 
   const handleDismissAll = useCallback(() => {
-    dismissAll();
-  }, []);
+    pinGuard.guard(dismissAll);
+  }, [pinGuard]);
 
   const handleNavigate = useCallback((route) => {
     navigate(route);
@@ -160,6 +164,10 @@ function NotificationsForecasting() {
           </div>
         )}
       </div>
+
+      {pinGuard.showModal && (
+        <PinModal onVerify={pinGuard.handleVerify} onCancel={pinGuard.handleCancel} />
+      )}
     </div>
   );
 }

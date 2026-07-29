@@ -2411,3 +2411,69 @@ code {
 .danger-btn:hover {
   background: rgba(239, 68, 68, 0.1);
 }
+
+/* ===== PIN MODAL ===== */
+.pin-modal {
+  max-width: 360px;
+  text-align: center;
+}
+
+.pin-modal-header {
+  margin-bottom: 20px;
+}
+
+.pin-modal-icon {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 12px;
+  color: #22c55e;
+}
+
+.pin-modal-header h3 {
+  margin: 0 0 6px;
+  font-size: 1.1rem;
+  color: #f8fafc;
+}
+
+.pin-modal-header p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.pin-input-group {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.pin-digit-input {
+  width: 52px;
+  height: 60px;
+  text-align: center;
+  font-size: 1.6rem;
+  font-weight: 700;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #f8fafc;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.pin-digit-input:focus {
+  border-color: #22c55e;
+}
+
+.pin-error {
+  color: #ef4444;
+  font-size: 0.85rem;
+  margin: 0 0 12px;
+}
+
+.pin-actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}

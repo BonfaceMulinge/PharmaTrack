@@ -130,15 +130,17 @@ const getReceipt = async (req, res) => {
           },
         },
         pharmacy: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            phone: true,
-            address: true,
-            logo: true,
-            licenseNumber: true,
-          },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        address: true,
+        logo: true,
+        licenseNumber: true,
+        country: true,
+        cashierName: true,
+      },
         },
         user: { select: { id: true, fullName: true, email: true } },
       },
@@ -210,7 +212,7 @@ const getPharmacyProfile = async (req, res) => {
 
 const updatePharmacyProfile = async (req, res) => {
   try {
-    const { name, email, phone, address, logo, licenseNumber, country } = req.body;
+    const { name, email, phone, address, logo, licenseNumber, country, cashierName } = req.body;
 
     const updated = await prisma.pharmacy.update({
       where: { id: req.pharmacyId },
@@ -222,6 +224,7 @@ const updatePharmacyProfile = async (req, res) => {
         ...(logo !== undefined && { logo }),
         ...(licenseNumber !== undefined && { licenseNumber }),
         ...(country !== undefined && { country }),
+        ...(cashierName !== undefined && { cashierName }),
       },
       select: {
         id: true,
@@ -232,6 +235,7 @@ const updatePharmacyProfile = async (req, res) => {
         logo: true,
         licenseNumber: true,
         country: true,
+        cashierName: true,
       },
     });
 

@@ -1,14 +1,19 @@
 import { useState, useCallback, memo } from 'react';
 import { authFetch, API_URL, setUser, getUser } from '../api';
+import { usePinGuard } from '../utils/pinSession';
+import PinModal from './PinModal';
 
 function ProfileSettings({ user, onUserUpdate }) {
   const [fullName, setFullName] = useState(user?.fullName || '');
   const [phone, setPhone] = useState(user?.phone || '');
+  const [cashierName, setCashierName] = useState(user?.cashierName || '');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+
+  const pinGuard = usePinGuard();
 
   const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
@@ -35,7 +40,6 @@ function ProfileSettings({ user, onUserUpdate }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Update failed');
 
-      setMessage('Profile updated successfully.');
       setCurrentPassword('');
       setNewPassword('');
 
@@ -46,12 +50,33 @@ function ProfileSettings({ user, onUserUpdate }) {
         setUser(stored);
         if (onUserUpdate) onUserUpdate({ fullName: data.user.fullName, phone: data.user.phone });
       }
+
+      if (cashierName !== (user?.cashierName || '')) {
+        const profileRes = await authFetch(`${API_URL}/receipts/pharmacy-profile`, {
+          method: 'PUT',
+          body: JSON.stringify({ cashierName: cashierName.trim() || null }),
+        });
+        const profileData = await profileRes.json();
+        if (!profileRes.ok) throw new Error(profileData.message || 'Failed to save cashier name');
+        if (stored) {
+          stored.cashierName = profileData.pharmacy.cashierName;
+          setUser(stored);
+          if (onUserUpdate) onUserUpdate({ cashierName: profileData.pharmacy.cashierName });
+        }
+      }
+
+      setMessage('Settings saved successfully.');
     } catch (err) {
-      setError(err.message || 'Update failed.');
+      setError(err.message || 'Save failed.');
     } finally {
       setSaving(false);
     }
-  }, [fullName, phone, currentPassword, newPassword, onUserUpdate]);
+  }, [fullName, phone, cashierName, currentPassword, newPassword, user, onUserUpdate]);
+
+  const guardedSubmit = useCallback((e) => {
+    e.preventDefault();
+    pinGuard.guard(() => handleSubmit(e));
+  }, [pinGuard, handleSubmit]);
 
   return (
     <div className="settings-section">
@@ -61,7 +86,7 @@ function ProfileSettings({ user, onUserUpdate }) {
       {error && <div className="status-banner error-banner">{error}</div>}
       {message && <div className="status-banner success-banner">{message}</div>}
 
-      <form onSubmit={handleSubmit} className="settings-form">
+      <form onSubmit={guardedSubmit} className="settings-form">
         <div className="settings-field">
           <label>Full Name</label>
           <input
@@ -95,6 +120,19 @@ function ProfileSettings({ user, onUserUpdate }) {
         </div>
 
         <hr className="settings-divider" />
+
+        <div className="settings-field">
+          <label>Cashier Name</label>
+          <input
+            type="text"
+            value={cashierName}
+            onChange={(e) => setCashierName(e.target.value)}
+            placeholder="Default cashier name for receipts"
+          />
+          <span className="settings-hint">Displayed on receipts. PIN required to change.</span>
+        </div>
+
+        <hr className="settings-divider" />
         <p className="settings-section-desc">Change Password (optional)</p>
 
         <div className="settings-field">
@@ -124,6 +162,10 @@ function ProfileSettings({ user, onUserUpdate }) {
           {saving ? 'Saving...' : 'Save Changes'}
         </button>
       </form>
+
+      {pinGuard.showModal && (
+        <PinModal onVerify={pinGuard.handleVerify} onCancel={pinGuard.handleCancel} />
+      )}
     </div>
   );
 }

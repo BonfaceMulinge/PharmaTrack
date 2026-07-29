@@ -87,6 +87,7 @@ const login = async (req, res) => {
         pharmacyId: user.pharmacyId,
         pharmacyName: user.pharmacy?.name || null,
         pharmacyLogo: user.pharmacy?.logo || null,
+        cashierName: user.pharmacy?.cashierName || null,
       },
       token,
       refreshToken,

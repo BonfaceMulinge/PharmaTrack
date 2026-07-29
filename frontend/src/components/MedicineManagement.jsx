@@ -11,6 +11,8 @@ import {
   applyOptimisticDelete,
 } from '../cache';
 import formatCurrency from '../utils/formatCurrency';
+import { usePinGuard } from '../utils/pinSession';
+import PinModal from './PinModal';
 
 const CATEGORIES = ['Tablets', 'Capsules', 'Syrup', 'Injection', 'Cream', 'Drops', 'Other'];
 
@@ -97,6 +99,8 @@ function MedicineManagement() {
 
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  const pinGuard = usePinGuard();
 
   const debouncedSearch = useDebounce(search, 150);
 
@@ -431,10 +435,10 @@ function MedicineManagement() {
                         <td data-label="Selling Price">{formatCurrency(Number(m.sellingPrice))}</td>
                         <td data-label="Status"><span className={`stock-badge ${status.className}`}>{status.label}</span></td>
                         <td data-label="Actions" className="actions-cell">
-                          <button className="icon-btn edit-btn" type="button" title="Edit" onClick={() => openEdit(m)}>
+                          <button className="icon-btn edit-btn" type="button" title="Edit" onClick={() => pinGuard.guard(() => openEdit(m))}>
                             &#9998;
                           </button>
-                          <button className="icon-btn delete-btn" type="button" title="Delete" onClick={() => confirmDelete(m)}>
+                          <button className="icon-btn delete-btn" type="button" title="Delete" onClick={() => pinGuard.guard(() => confirmDelete(m))}>
                             &#128465;
                           </button>
                         </td>
@@ -461,8 +465,8 @@ function MedicineManagement() {
                       <div className="mobile-card-row"><span>Selling Price</span><span>{formatCurrency(Number(m.sellingPrice))}</span></div>
                     </div>
                     <div className="mobile-card-actions">
-                      <button className="ghost-btn small-btn" type="button" onClick={() => openEdit(m)}>&#9998; Edit</button>
-                      <button className="ghost-btn small-btn danger-btn" type="button" onClick={() => confirmDelete(m)}>&#128465; Delete</button>
+                      <button className="ghost-btn small-btn" type="button" onClick={() => pinGuard.guard(() => openEdit(m))}>&#9998; Edit</button>
+                      <button className="ghost-btn small-btn danger-btn" type="button" onClick={() => pinGuard.guard(() => confirmDelete(m))}>&#128465; Delete</button>
                     </div>
                   </div>
                 );
@@ -533,6 +537,10 @@ function MedicineManagement() {
             </div>
           </div>
         </div>
+      )}
+
+      {pinGuard.showModal && (
+        <PinModal onVerify={pinGuard.handleVerify} onCancel={pinGuard.handleCancel} />
       )}
     </div>
   );

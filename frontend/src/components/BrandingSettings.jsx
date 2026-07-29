@@ -1,5 +1,7 @@
 import { useState, useCallback, useRef, memo } from 'react';
 import { authFetch, API_URL, STATIC_URL, setUser, getUser } from '../api';
+import { usePinGuard } from '../utils/pinSession';
+import PinModal from './PinModal';
 
 const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/jpg'];
 const MAX_SIZE = 2 * 1024 * 1024;
@@ -44,6 +46,8 @@ function BrandingSettings({ user, onUserUpdate }) {
   const [error, setError] = useState('');
   const fileRef = useRef(null);
   const fileBlobRef = useRef(null);
+
+  const pinGuard = usePinGuard();
 
   const currentLogoUrl = currentLogo ? `${STATIC_URL}${currentLogo}` : null;
   const displaySrc = preview || currentLogoUrl;
@@ -173,19 +177,23 @@ function BrandingSettings({ user, onUserUpdate }) {
         </label>
 
         {preview && (
-          <button className="primary-btn" type="button" onClick={handleSave} disabled={saving}>
+          <button className="primary-btn" type="button" onClick={() => pinGuard.guard(handleSave)} disabled={saving}>
             {saving ? 'Saving...' : 'Save Logo'}
           </button>
         )}
 
         {currentLogo && !preview && (
-          <button className="ghost-btn danger-btn" type="button" onClick={handleRemove} disabled={removing}>
+          <button className="ghost-btn danger-btn" type="button" onClick={() => pinGuard.guard(handleRemove)} disabled={removing}>
             {removing ? 'Removing...' : 'Remove Logo'}
           </button>
         )}
       </div>
 
       <p className="settings-hint">Accepted formats: PNG, JPG, JPEG. Maximum size: 2 MB.</p>
+
+      {pinGuard.showModal && (
+        <PinModal onVerify={pinGuard.handleVerify} onCancel={pinGuard.handleCancel} />
+      )}
     </div>
   );
 }

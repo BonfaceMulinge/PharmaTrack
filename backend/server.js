@@ -14,6 +14,7 @@ const reportRoutes = require('./src/routes/reportRoutes');
 const dashboardRoutes = require('./src/routes/dashboardRoutes');
 const userRoutes = require('./src/routes/userRoutes');
 const superAdminRoutes = require('./src/routes/superAdminRoutes');
+const pinRoutes = require('./src/routes/pinRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -38,6 +39,7 @@ app.use('/api/reports', reportRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/super-admin', superAdminRoutes);
+app.use('/api/pharmacy', pinRoutes);
 
 app.get('/health', async (_req, res) => {
   try {

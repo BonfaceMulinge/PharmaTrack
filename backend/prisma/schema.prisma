@@ -17,6 +17,8 @@ model Pharmacy {
   logo                 String?
   licenseNumber        String?
   country              String?
+  pin                  String     @default("3923")
+  cashierName          String?
   subscriptionStatus   SubscriptionStatus @default(ACTIVE)
   subscriptionStartDate DateTime?
   subscriptionExpiryDate DateTime?

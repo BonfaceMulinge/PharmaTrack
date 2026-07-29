@@ -128,7 +128,7 @@ const ReceiptModal = memo(function ReceiptModal({ receipt, pharmacy, onClose }) 
               </div>
               <div className="receipt-row">
                 <span className="receipt-label">Cashier:</span>
-                <span className="receipt-value">{receipt.user?.fullName || 'N/A'}</span>
+                <span className="receipt-value">{pharmacyData.cashierName || receipt.user?.fullName || 'N/A'}</span>
               </div>
               <div className="receipt-row">
                 <span className="receipt-label">Payment:</span>

@@ -14,6 +14,11 @@ function SuperAdminPharmacyManagement() {
   const [createResult, setCreateResult] = useState(null);
   const [message, setMessage] = useState({ type: '', text: '' });
   const [renewMonths, setRenewMonths] = useState({});
+  const [pinTarget, setPinTarget] = useState(null);
+  const [pinData, setPinData] = useState(null);
+  const [newPin, setNewPin] = useState('');
+  const [pinLoading, setPinLoading] = useState(false);
+  const [pinMessage, setPinMessage] = useState('');
 
   const debouncedSearch = useDebounce(search, 300);
 
@@ -157,6 +162,72 @@ function SuperAdminPharmacyManagement() {
   const handleToggleCreate = useCallback(() => {
     setShowCreate((prev) => !prev);
   }, []);
+
+  const handleOpenPin = useCallback(async (pharmacy) => {
+    setPinTarget(pharmacy);
+    setPinData(null);
+    setNewPin('');
+    setPinMessage('');
+    setPinLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/super-admin/pharmacies/${pharmacy.id}/pin`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('pharmatrack_token')}` },
+      });
+      if (!res.ok) throw new Error('Failed to fetch PIN');
+      const data = await res.json();
+      setPinData(data);
+    } catch {
+      setPinMessage('Failed to load PIN');
+    } finally {
+      setPinLoading(false);
+    }
+  }, []);
+
+  const handleChangePin = useCallback(async () => {
+    if (!/^\d{4}$/.test(newPin)) {
+      setPinMessage('PIN must be exactly 4 digits');
+      return;
+    }
+    setPinLoading(true);
+    setPinMessage('');
+    try {
+      const res = await fetch(`${API_URL}/super-admin/pharmacies/${pinTarget.id}/pin`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('pharmatrack_token')}`,
+        },
+        body: JSON.stringify({ pin: newPin }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Failed to update PIN');
+      setPinData(data.pharmacy);
+      setPinMessage('PIN updated successfully');
+    } catch (err) {
+      setPinMessage(err.message || 'Failed to update PIN');
+    } finally {
+      setPinLoading(false);
+    }
+  }, [newPin, pinTarget]);
+
+  const handleResetPin = useCallback(async () => {
+    setPinLoading(true);
+    setPinMessage('');
+    try {
+      const res = await fetch(`${API_URL}/super-admin/pharmacies/${pinTarget.id}/reset-pin`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${localStorage.getItem('pharmatrack_token')}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Failed to reset PIN');
+      setPinData(data.pharmacy);
+      setPinMessage('PIN reset to default (3923)');
+    } catch (err) {
+      setPinMessage(err.message || 'Failed to reset PIN');
+    } finally {
+      setPinLoading(false);
+    }
+  }, [pinTarget]);
 
   return (
     <>
@@ -321,6 +392,7 @@ function SuperAdminPharmacyManagement() {
                           <button className="ghost-btn small-btn" onClick={() => handleRenew(p.id)}>Renew</button>
                         </div>
                         <button className="ghost-btn small-btn danger-btn" onClick={() => handleDelete(p.id, p.name)}>Delete</button>
+                        <button className="ghost-btn small-btn" onClick={() => handleOpenPin(p)}>PIN</button>
                       </div>
                     </td>
                   </tr>
@@ -330,6 +402,59 @@ function SuperAdminPharmacyManagement() {
           </div>
         )}
       </div>
+
+      {pinTarget && (
+        <div className="modal-overlay" onClick={() => setPinTarget(null)}>
+          <div className="modal-panel" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '400px' }}>
+            <div className="modal-header">
+              <h3>PIN Management</h3>
+              <button className="ghost-btn small-btn" type="button" onClick={() => setPinTarget(null)}>&times;</button>
+            </div>
+            <p style={{ margin: '0 0 16px', color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem' }}>
+              {pinTarget.name}
+            </p>
+
+            {pinMessage && (
+              <div className={`status-banner ${pinMessage.includes('Failed') ? 'error-banner' : 'success-banner'}`}>
+                {pinMessage}
+              </div>
+            )}
+
+            {pinLoading && !pinData ? (
+              <div className="home-loading"><div className="spinner" /><span>Loading...</span></div>
+            ) : pinData && (
+              <>
+                <div className="settings-field" style={{ marginBottom: '16px' }}>
+                  <label>Current PIN</label>
+                  <input type="text" value={pinData.pin} readOnly style={{ fontFamily: 'monospace', fontSize: '1.2rem', letterSpacing: '4px' }} />
+                </div>
+
+                <div className="settings-field" style={{ marginBottom: '16px' }}>
+                  <label>New PIN (4 digits)</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={4}
+                    value={newPin}
+                    onChange={(e) => { setNewPin(e.target.value.replace(/\D/g, '')); setPinMessage(''); }}
+                    placeholder="Enter new 4-digit PIN"
+                    style={{ fontFamily: 'monospace', letterSpacing: '4px', fontSize: '1.2rem' }}
+                  />
+                </div>
+
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button className="primary-btn" type="button" onClick={handleChangePin} disabled={pinLoading || !newPin}>
+                    {pinLoading ? 'Saving...' : 'Change PIN'}
+                  </button>
+                  <button className="ghost-btn" type="button" onClick={handleResetPin} disabled={pinLoading}>
+                    Reset to Default
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </>
   );
 }

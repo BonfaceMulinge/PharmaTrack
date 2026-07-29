@@ -14,6 +14,7 @@ const {
   resetUserPassword,
   toggleUserActive,
 } = require('../controllers/superAdminController');
+const { getPharmacyPin, updatePharmacyPin, resetPharmacyPin } = require('../controllers/pinController');
 
 const router = express.Router();
 
@@ -41,5 +42,9 @@ router.post('/pharmacies/:id/renew', renewSubscription);
 router.get('/users', getAllUsers);
 router.post('/users/:id/reset-password', resetUserPassword);
 router.post('/users/:id/toggle-active', toggleUserActive);
+
+router.get('/pharmacies/:id/pin', getPharmacyPin);
+router.put('/pharmacies/:id/pin', updatePharmacyPin);
+router.post('/pharmacies/:id/reset-pin', resetPharmacyPin);
 
 module.exports = router;
