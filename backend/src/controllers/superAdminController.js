@@ -1,5 +1,6 @@
 const bcrypt = require('bcryptjs');
 const prisma = require('../utils/prisma');
+const { generatePharmacyCode, ensureUniqueCode } = require('../utils/pharmacyCode');
 
 const getDashboardStats = async (req, res) => {
   try {
@@ -127,6 +128,9 @@ const createPharmacy = async (req, res) => {
     const expiryDate = new Date(now);
     expiryDate.setMonth(expiryDate.getMonth() + 1);
 
+    const baseCode = generatePharmacyCode(name);
+    const pharmacyCode = await ensureUniqueCode(baseCode, prisma);
+
     const result = await prisma.$transaction(async (tx) => {
       const pharmacy = await tx.pharmacy.create({
         data: {
@@ -138,6 +142,7 @@ const createPharmacy = async (req, res) => {
           logo: logo || null,
           licenseNumber: licenseNumber || null,
           country: country || null,
+          pharmacyCode,
           subscriptionStatus: 'ACTIVE',
           subscriptionStartDate: now,
           subscriptionExpiryDate: expiryDate,
@@ -163,20 +168,21 @@ const createPharmacy = async (req, res) => {
 
     res.status(201).json({
       message: 'Pharmacy created successfully',
-      pharmacy: {
-        id: result.pharmacy.id,
-        name: result.pharmacy.name,
-        ownerName: result.pharmacy.ownerName,
-        email: result.pharmacy.email,
-        phone: result.pharmacy.phone,
-        address: result.pharmacy.address,
-        logo: result.pharmacy.logo,
-        licenseNumber: result.pharmacy.licenseNumber,
-        country: result.pharmacy.country,
-        subscriptionStatus: result.pharmacy.subscriptionStatus,
-        subscriptionStartDate: result.pharmacy.subscriptionStartDate,
-        subscriptionExpiryDate: result.pharmacy.subscriptionExpiryDate,
-      },
+        pharmacy: {
+          id: result.pharmacy.id,
+          name: result.pharmacy.name,
+          ownerName: result.pharmacy.ownerName,
+          email: result.pharmacy.email,
+          phone: result.pharmacy.phone,
+          address: result.pharmacy.address,
+          logo: result.pharmacy.logo,
+          licenseNumber: result.pharmacy.licenseNumber,
+          country: result.pharmacy.country,
+          pharmacyCode: result.pharmacy.pharmacyCode,
+          subscriptionStatus: result.pharmacy.subscriptionStatus,
+          subscriptionStartDate: result.pharmacy.subscriptionStartDate,
+          subscriptionExpiryDate: result.pharmacy.subscriptionExpiryDate,
+        },
       adminEmail: result.user.email,
       tempPassword: password,
     });

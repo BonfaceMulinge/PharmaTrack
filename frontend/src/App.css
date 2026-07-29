@@ -1448,6 +1448,102 @@ body {
   border-color: #22c55e;
 }
 
+.receipt-summary-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.summary-card {
+  padding: 16px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.summary-card-label {
+  font-size: 0.82rem;
+  color: #8ca0bb;
+}
+
+.summary-card-value {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+.preset-filters {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.preset-btn {
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(7, 17, 31, 0.6);
+  color: #c8d3e2;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.preset-btn:hover {
+  border-color: #22c55e;
+  color: #f8fafc;
+}
+
+.preset-btn.active {
+  background: #22c55e;
+  color: #07111f;
+  border-color: #22c55e;
+  font-weight: 600;
+}
+
+.archive-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: #8ca0bb;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.archive-toggle input {
+  accent-color: #22c55e;
+}
+
+.receipt-actions-bar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.row-archived {
+  opacity: 0.6;
+}
+
+.pharmacy-code-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pharmacy-code-display {
+  font-family: 'Courier New', monospace;
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: #22c55e;
+  padding: 6px 12px;
+  background: rgba(34, 197, 94, 0.1);
+  border-radius: 6px;
+}
+
 /* ===== PAGINATION ===== */
 .pagination {
   display: flex;
@@ -1951,6 +2047,10 @@ code {
 
   .date-filters input {
     width: 100%;
+  }
+
+  .receipt-summary-cards {
+    grid-template-columns: repeat(2, 1fr);
   }
 
   .topbar {

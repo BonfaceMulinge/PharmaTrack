@@ -1,4 +1,5 @@
 const prisma = require('../utils/prisma');
+const { generateReceiptNumber } = require('../utils/receiptNumber');
 
 const getSales = async (req, res) => {
   try {
@@ -61,7 +62,7 @@ const createSale = async (req, res) => {
       return res.status(400).json({ message: 'Each sale item must include a medicine and quantity greater than zero' });
     }
 
-    const finalReceiptNumber = receiptNumber || `RCPT-${Date.now()}`;
+    const finalReceiptNumber = receiptNumber || (await generateReceiptNumber(req.pharmacyId, prisma));
 
     const pharmacy = await prisma.pharmacy.findUnique({
       where: { id: req.pharmacyId },

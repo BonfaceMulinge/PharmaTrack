@@ -19,6 +19,7 @@ model Pharmacy {
   country              String?
   pin                  String     @default("3923")
   cashierName          String?
+  pharmacyCode         String?    @unique
   subscriptionStatus   SubscriptionStatus @default(ACTIVE)
   subscriptionStartDate DateTime?
   subscriptionExpiryDate DateTime?
@@ -228,6 +229,7 @@ model Receipt {
   tax             Decimal       @default(0)
   totalAmount     Decimal
   paymentMethod   PaymentMethod
+  archived        Boolean       @default(false)
   createdAt       DateTime      @default(now())
   sale            Sale          @relation(fields: [saleId], references: [id])
   pharmacy        Pharmacy      @relation(fields: [pharmacyId], references: [id])

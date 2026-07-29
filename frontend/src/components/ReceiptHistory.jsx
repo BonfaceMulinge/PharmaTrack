@@ -5,16 +5,28 @@ import { subscribe, Events } from '../store';
 import ReceiptModal from './ReceiptModal';
 import formatCurrency from '../utils/formatCurrency';
 
+const PRESETS = [
+  { label: 'Today', value: 'today' },
+  { label: 'Yesterday', value: 'yesterday' },
+  { label: 'This Week', value: 'week' },
+  { label: 'This Month', value: 'month' },
+  { label: 'Custom', value: 'custom' },
+];
+
 function ReceiptHistory() {
   const [receipts, setReceipts] = useState([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [datePreset, setDatePreset] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [showArchived, setShowArchived] = useState(false);
   const [selectedReceipt, setSelectedReceipt] = useState(null);
   const [pharmacy, setPharmacy] = useState(null);
+  const [summary, setSummary] = useState({ receiptsToday: 0, salesToday: 0, receiptsMonth: 0, salesMonth: 0 });
+  const [exporting, setExporting] = useState('');
 
   const debouncedSearch = useDebounce(search, 300);
   const pharmacyRef = useRef(null);
@@ -25,20 +37,31 @@ function ReceiptHistory() {
       try {
         const params = new URLSearchParams({ page: String(page), limit: '20' });
         if (debouncedSearch) params.set('search', debouncedSearch);
-        if (dateFrom) params.set('dateFrom', dateFrom);
-        if (dateTo) params.set('dateTo', dateTo);
+        if (datePreset && datePreset !== 'custom') params.set('datePreset', datePreset);
+        if (datePreset === 'custom') {
+          if (dateFrom) params.set('dateFrom', dateFrom);
+          if (dateTo) params.set('dateTo', dateTo);
+        }
+        if (showArchived) params.set('archived', 'true');
 
-        const requests = [authFetch(`${API_URL}/receipts?${params}`)];
+        const requests = [
+          authFetch(`${API_URL}/receipts?${params}`),
+          authFetch(`${API_URL}/receipts/summary`),
+        ];
         if (!pharmacyRef.current) requests.push(authFetch(`${API_URL}/receipts/pharmacy-profile`));
 
         const results = await Promise.all(requests);
         if (cancelled) return;
 
-        const [receiptsRes, profileRes] = results;
+        const [receiptsRes, summaryRes, profileRes] = results;
         if (receiptsRes.ok) {
           const data = await receiptsRes.json();
           setReceipts(data.receipts || []);
           setTotal(data.total || 0);
+        }
+        if (summaryRes.ok) {
+          const sData = await summaryRes.json();
+          setSummary(sData);
         }
         if (profileRes && profileRes.ok) {
           const pData = await profileRes.json();
@@ -54,11 +77,20 @@ function ReceiptHistory() {
     load();
     const unsub = subscribe(Events.SALE_COMPLETED, load);
     return () => { cancelled = true; unsub(); };
-  }, [page, debouncedSearch, dateFrom, dateTo]);
+  }, [page, debouncedSearch, datePreset, dateFrom, dateTo, showArchived]);
 
   const handleSearchChange = useCallback((e) => {
     setSearch(e.target.value);
     setPage(1);
+  }, []);
+
+  const handlePresetChange = useCallback((value) => {
+    setDatePreset(value);
+    setPage(1);
+    if (value !== 'custom') {
+      setDateFrom('');
+      setDateTo('');
+    }
   }, []);
 
   const handleDateFromChange = useCallback((e) => {
@@ -87,6 +119,52 @@ function ReceiptHistory() {
     setSelectedReceipt(null);
   }, []);
 
+  const handleArchive = useCallback(async (id) => {
+    try {
+      const res = await authFetch(`${API_URL}/receipts/${id}/archive`, { method: 'PUT' });
+      if (res.ok) {
+        const data = await res.json();
+        setReceipts((prev) => prev.map((r) => r.id === id ? { ...r, archived: data.receipt.archived } : r));
+      }
+    } catch (err) {
+      console.error('[ReceiptHistory] Archive error:', err);
+    }
+  }, []);
+
+  const handleExport = useCallback(async (format) => {
+    if (format === 'pdf') {
+      return;
+    }
+    setExporting(format);
+    try {
+      const params = new URLSearchParams({ format });
+      if (debouncedSearch) params.set('search', debouncedSearch);
+      if (datePreset && datePreset !== 'custom') params.set('datePreset', datePreset);
+      if (datePreset === 'custom') {
+        if (dateFrom) params.set('dateFrom', dateFrom);
+        if (dateTo) params.set('dateTo', dateTo);
+      }
+      if (showArchived) params.set('archived', 'true');
+
+      const res = await authFetch(`${API_URL}/receipts/export?${params}`);
+      if (!res.ok) throw new Error('Export failed');
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `receipts-export-${Date.now()}.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('[ReceiptHistory] Export error:', err);
+    } finally {
+      setExporting('');
+    }
+  }, [debouncedSearch, datePreset, dateFrom, dateTo, showArchived]);
+
   const totalPages = Math.max(1, Math.ceil(total / 20));
 
   return (
@@ -98,28 +176,74 @@ function ReceiptHistory() {
         </div>
       </div>
 
+      <div className="receipt-summary-cards">
+        <div className="summary-card">
+          <span className="summary-card-label">Receipts Today</span>
+          <span className="summary-card-value">{summary.receiptsToday}</span>
+        </div>
+        <div className="summary-card">
+          <span className="summary-card-label">Sales Today</span>
+          <span className="summary-card-value">{formatCurrency(summary.salesToday)}</span>
+        </div>
+        <div className="summary-card">
+          <span className="summary-card-label">Receipts This Month</span>
+          <span className="summary-card-value">{summary.receiptsMonth}</span>
+        </div>
+        <div className="summary-card">
+          <span className="summary-card-label">Sales This Month</span>
+          <span className="summary-card-value">{formatCurrency(summary.salesMonth)}</span>
+        </div>
+      </div>
+
       <div className="receipt-filters">
         <input
           className="search-input"
-          placeholder="Search by receipt # or cashier..."
+          placeholder="Search by receipt #, cashier, or medicine..."
           value={search}
           onChange={handleSearchChange}
         />
-        <div className="date-filters">
-          <label>
-            From
-            <input type="date" value={dateFrom} onChange={handleDateFromChange} />
-          </label>
-          <label>
-            To
-            <input type="date" value={dateTo} onChange={handleDateToChange} />
-          </label>
+        <div className="preset-filters">
+          {PRESETS.map((p) => (
+            <button
+              key={p.value}
+              type="button"
+              className={`preset-btn${datePreset === p.value ? ' active' : ''}`}
+              onClick={() => handlePresetChange(p.value)}
+            >
+              {p.label}
+            </button>
+          ))}
         </div>
+        {datePreset === 'custom' && (
+          <div className="date-filters">
+            <label>
+              From
+              <input type="date" value={dateFrom} onChange={handleDateFromChange} />
+            </label>
+            <label>
+              To
+              <input type="date" value={dateTo} onChange={handleDateToChange} />
+            </label>
+          </div>
+        )}
+        <label className="archive-toggle">
+          <input type="checkbox" checked={showArchived} onChange={(e) => { setShowArchived(e.target.checked); setPage(1); }} />
+          Show archived
+        </label>
+      </div>
+
+      <div className="receipt-actions-bar">
+        <button className="ghost-btn small-btn" type="button" onClick={() => handleExport('csv')} disabled={!!exporting}>
+          {exporting === 'csv' ? 'Exporting...' : 'Export CSV'}
+        </button>
+        <button className="ghost-btn small-btn" type="button" onClick={() => handleExport('xlsx')} disabled={!!exporting}>
+          {exporting === 'xlsx' ? 'Exporting...' : 'Export Excel'}
+        </button>
       </div>
 
       <div className="panel">
         <div className="panel-header">
-          <h3>Receipts ({total})</h3>
+          <h3>Receipts {showArchived ? '(Archived)' : ''} ({total})</h3>
         </div>
 
         {isLoading ? (
@@ -143,7 +267,7 @@ function ReceiptHistory() {
               </thead>
               <tbody>
                 {receipts.map((r) => (
-                  <tr key={r.id}>
+                  <tr key={r.id} className={r.archived ? 'row-archived' : ''}>
                     <td><strong>{r.receiptNumber}</strong></td>
                     <td>{new Date(r.createdAt).toLocaleDateString('en-KE')}</td>
                     <td>{r.sale?.cashierName || r.user?.fullName || 'N/A'}</td>
@@ -151,9 +275,12 @@ function ReceiptHistory() {
                     <td>{formatCurrency(r.amountPaid)}</td>
                     <td>{formatCurrency(r.balance)}</td>
                     <td><span className="pill">{(r.paymentMethod || '').replace('_', ' ')}</span></td>
-                    <td>
+                    <td className="actions-cell">
                       <button className="ghost-btn small-btn" type="button" onClick={() => handleViewReceipt(r.id)}>
                         View
+                      </button>
+                      <button className="ghost-btn small-btn" type="button" onClick={() => handleArchive(r.id)}>
+                        {r.archived ? 'Unarchive' : 'Archive'}
                       </button>
                     </td>
                   </tr>

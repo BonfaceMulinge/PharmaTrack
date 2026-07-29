@@ -1,4 +1,4 @@
-import { useState, useCallback, memo } from 'react';
+import { useState, useEffect, useCallback, memo } from 'react';
 import { authFetch, API_URL, setUser, getUser } from '../api';
 import { usePinGuard } from '../utils/pinSession';
 import PinModal from './PinModal';
@@ -7,6 +7,9 @@ function ProfileSettings({ user, onUserUpdate }) {
   const [fullName, setFullName] = useState(user?.fullName || '');
   const [phone, setPhone] = useState(user?.phone || '');
   const [cashierName, setCashierName] = useState(user?.cashierName || '');
+  const [pharmacyCode, setPharmacyCode] = useState('');
+  const [originalCode, setOriginalCode] = useState('');
+  const [codeEditMode, setCodeEditMode] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [saving, setSaving] = useState(false);
@@ -14,6 +17,21 @@ function ProfileSettings({ user, onUserUpdate }) {
   const [error, setError] = useState('');
 
   const pinGuard = usePinGuard();
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await authFetch(`${API_URL}/receipts/pharmacy-code`);
+        if (!cancelled && res.ok) {
+          const data = await res.json();
+          setPharmacyCode(data.pharmacyCode || '');
+          setOriginalCode(data.pharmacyCode || '');
+        }
+      } catch { /* silent */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
@@ -77,6 +95,37 @@ function ProfileSettings({ user, onUserUpdate }) {
     e.preventDefault();
     pinGuard.guard(() => handleSubmit(e));
   }, [pinGuard, handleSubmit]);
+
+  const handleCodeSave = useCallback(async (newCode) => {
+    const code = newCode.toUpperCase();
+    if (code.length < 2 || code.length > 6) {
+      setError('Pharmacy code must be between 2 and 6 characters.');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    setMessage('');
+    try {
+      const res = await authFetch(`${API_URL}/receipts/pharmacy-code`, {
+        method: 'PUT',
+        body: JSON.stringify({ pharmacyCode: code }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Failed to update pharmacy code');
+      setPharmacyCode(data.pharmacyCode);
+      setOriginalCode(data.pharmacyCode);
+      setCodeEditMode(false);
+      setMessage('Pharmacy code updated successfully.');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }, []);
+
+  const guardedCodeSave = useCallback(() => {
+    pinGuard.guard(() => handleCodeSave(pharmacyCode));
+  }, [pinGuard, handleCodeSave, pharmacyCode]);
 
   return (
     <div className="settings-section">
@@ -162,6 +211,41 @@ function ProfileSettings({ user, onUserUpdate }) {
           {saving ? 'Saving...' : 'Save Changes'}
         </button>
       </form>
+
+      <hr className="settings-divider" />
+
+      <div className="settings-field">
+        <label>Pharmacy Code</label>
+        <div className="pharmacy-code-row">
+          {codeEditMode ? (
+            <>
+              <input
+                type="text"
+                value={pharmacyCode}
+                onChange={(e) => setPharmacyCode(e.target.value.toUpperCase())}
+                placeholder="2-6 characters"
+                minLength={2}
+                maxLength={6}
+                style={{ textTransform: 'uppercase', width: '200px' }}
+              />
+              <button className="primary-btn small-btn" type="button" onClick={guardedCodeSave} disabled={saving || pharmacyCode === originalCode}>
+                {saving ? 'Saving...' : 'Save'}
+              </button>
+              <button className="ghost-btn small-btn" type="button" onClick={() => { setPharmacyCode(originalCode); setCodeEditMode(false); }}>
+                Cancel
+              </button>
+            </>
+          ) : (
+            <>
+              <span className="pharmacy-code-display">{pharmacyCode || 'Not set'}</span>
+              <button className="ghost-btn small-btn" type="button" onClick={() => setCodeEditMode(true)}>
+                Change
+              </button>
+            </>
+          )}
+        </div>
+        <span className="settings-hint">Used for receipt numbering. PIN required to change. Must be unique.</span>
+      </div>
 
       {pinGuard.showModal && (
         <PinModal onVerify={pinGuard.handleVerify} onCancel={pinGuard.handleCancel} />
