@@ -9,7 +9,7 @@ const getDashboardStats = async (req, res) => {
     const [
       totalPharmacies,
       activePharmacies,
-      inactivePharmacies,
+      suspendedPharmacies,
       activeSubscriptions,
       trialAccounts,
       expiredAccounts,
@@ -24,17 +24,7 @@ const getDashboardStats = async (req, res) => {
           ],
         },
       }),
-      prisma.pharmacy.count({
-        where: {
-          deletedAt: null,
-          NOT: {
-            OR: [
-              { users: { some: { lastLoginAt: { gte: thirtyDaysAgo } } } },
-              { sales: { some: { saleDate: { gte: thirtyDaysAgo } } } },
-            ],
-          },
-        },
-      }),
+      prisma.pharmacy.count({ where: { deletedAt: null, subscriptionStatus: 'SUSPENDED' } }),
       prisma.pharmacy.count({ where: { deletedAt: null, subscriptionStatus: 'ACTIVE' } }),
       prisma.pharmacy.count({ where: { deletedAt: null, subscriptionStatus: 'TRIAL' } }),
       prisma.pharmacy.count({ where: { deletedAt: null, subscriptionStatus: 'EXPIRED' } }),
@@ -61,7 +51,7 @@ const getDashboardStats = async (req, res) => {
       stats: {
         totalPharmacies,
         activePharmacies,
-        inactivePharmacies,
+        suspendedPharmacies,
         activeSubscriptions,
         trialAccounts,
         expiredAccounts,
