@@ -4,34 +4,55 @@ const { generatePharmacyCode, ensureUniqueCode } = require('../utils/pharmacyCod
 
 const getDashboardStats = async (req, res) => {
   try {
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
     const [
       totalPharmacies,
       activePharmacies,
-      suspendedPharmacies,
-      expiredPharmacies,
-      totalUsers,
-      totalMedicines,
-      totalSales,
-      salesToday,
+      inactivePharmacies,
+      activeSubscriptions,
+      trialAccounts,
+      expiredAccounts,
     ] = await Promise.all([
       prisma.pharmacy.count({ where: { deletedAt: null } }),
+      prisma.pharmacy.count({
+        where: {
+          deletedAt: null,
+          OR: [
+            { users: { some: { lastLoginAt: { gte: thirtyDaysAgo } } } },
+            { sales: { some: { saleDate: { gte: thirtyDaysAgo } } } },
+          ],
+        },
+      }),
+      prisma.pharmacy.count({
+        where: {
+          deletedAt: null,
+          NOT: {
+            OR: [
+              { users: { some: { lastLoginAt: { gte: thirtyDaysAgo } } } },
+              { sales: { some: { saleDate: { gte: thirtyDaysAgo } } } },
+            ],
+          },
+        },
+      }),
       prisma.pharmacy.count({ where: { deletedAt: null, subscriptionStatus: 'ACTIVE' } }),
-      prisma.pharmacy.count({ where: { deletedAt: null, subscriptionStatus: 'SUSPENDED' } }),
+      prisma.pharmacy.count({ where: { deletedAt: null, subscriptionStatus: 'TRIAL' } }),
       prisma.pharmacy.count({ where: { deletedAt: null, subscriptionStatus: 'EXPIRED' } }),
-      prisma.user.count({ where: { deletedAt: null, isSuperAdmin: false } }),
-      prisma.medicine.count({ where: { deletedAt: null } }),
-      prisma.sale.count({ where: { deletedAt: null } }),
-      prisma.sale.count({ where: { deletedAt: null, saleDate: { gte: todayStart } } }),
     ]);
 
     const recentPharmacies = await prisma.pharmacy.findMany({
       where: { deletedAt: null },
       orderBy: { createdAt: 'desc' },
       take: 10,
-      include: {
+      select: {
+        id: true,
+        name: true,
+        ownerName: true,
+        email: true,
+        pharmacyCode: true,
+        subscriptionStatus: true,
+        subscriptionExpiryDate: true,
+        createdAt: true,
         _count: { select: { users: true, medicines: true, sales: true } },
       },
     });
@@ -40,12 +61,10 @@ const getDashboardStats = async (req, res) => {
       stats: {
         totalPharmacies,
         activePharmacies,
-        suspendedPharmacies,
-        expiredPharmacies,
-        totalUsers,
-        totalMedicines,
-        totalSales,
-        salesToday,
+        inactivePharmacies,
+        activeSubscriptions,
+        trialAccounts,
+        expiredAccounts,
       },
       recentPharmacies,
     });

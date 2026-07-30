@@ -19,6 +19,24 @@ const StatCard = memo(function StatCard({ iconPath, label, value, iconClass }) {
   );
 });
 
+function SubscriptionCard({ active, trial, expired }) {
+  return (
+    <div className="stat-card subscription-card">
+      <div className="stat-icon stat-icon-purple">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+        </svg>
+      </div>
+      <p>Subscription Status</p>
+      <div className="sub-breakdown">
+        <span className="sub-row"><span className="sub-label">Active Subscriptions</span><span className="sub-value">{active}</span></span>
+        <span className="sub-row"><span className="sub-label">Trial Accounts</span><span className="sub-value">{trial}</span></span>
+        <span className="sub-row"><span className="sub-label">Expired Accounts</span><span className="sub-value">{expired}</span></span>
+      </div>
+    </div>
+  );
+}
+
 function SuperAdminDashboard({ onLogout }) {
   const [activeNav, setActiveNav] = useState('sa-dashboard');
   const [stats, setStats] = useState(null);
@@ -66,6 +84,11 @@ function SuperAdminDashboard({ onLogout }) {
 
   const handleToggleMenu = useCallback(() => {
     setMenuOpen((o) => !o);
+  }, []);
+
+  const handleQuickAction = useCallback(() => {
+    setActiveNav('sa-pharmacies');
+    setMenuOpen(false);
   }, []);
 
   return (
@@ -121,13 +144,20 @@ function SuperAdminDashboard({ onLogout }) {
               <>
                 <div className="stats-grid">
                   <StatCard iconPath="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" label="Total Pharmacies" value={stats.stats.totalPharmacies} iconClass="stat-icon-green" />
-                  <StatCard iconPath="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" label="Active" value={stats.stats.activePharmacies} iconClass="stat-icon-blue" />
-                  <StatCard iconPath="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" label="Suspended" value={stats.stats.suspendedPharmacies} iconClass="stat-icon-amber" />
-                  <StatCard iconPath="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" label="Expired" value={stats.stats.expiredPharmacies} iconClass="stat-icon-red" />
-                  <StatCard iconPath="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" label="Total Users" value={stats.stats.totalUsers} iconClass="stat-icon-purple" />
-                  <StatCard iconPath="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" label="Total Medicines" value={stats.stats.totalMedicines} iconClass="stat-icon-green" />
-                  <StatCard iconPath="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" label="Total Sales" value={stats.stats.totalSales} iconClass="stat-icon-blue" />
-                  <StatCard iconPath="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" label="Sales Today" value={stats.stats.salesToday} iconClass="stat-icon-amber" />
+                  <StatCard iconPath="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" label="Active Pharmacies" value={stats.stats.activePharmacies} iconClass="stat-icon-blue" />
+                  <StatCard iconPath="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" label="Inactive Pharmacies" value={stats.stats.inactivePharmacies} iconClass="stat-icon-amber" />
+                  <SubscriptionCard active={stats.stats.activeSubscriptions} trial={stats.stats.trialAccounts} expired={stats.stats.expiredAccounts} />
+                </div>
+
+                <div className="quick-actions">
+                  <span className="quick-actions-label">Quick Actions</span>
+                  <div className="quick-actions-buttons">
+                    <button className="primary-btn" type="button" onClick={() => handleQuickAction('create')}>+ Create Pharmacy</button>
+                    <button className="ghost-btn" type="button" onClick={() => handleQuickAction('view')}>View Pharmacies</button>
+                    <button className="ghost-btn" type="button" onClick={() => handleQuickAction('reset')}>Reset Password</button>
+                    <button className="ghost-btn" type="button" onClick={() => handleQuickAction('suspend')}>Suspend Pharmacy</button>
+                    <button className="ghost-btn" type="button" onClick={() => handleQuickAction('activate')}>Activate Pharmacy</button>
+                  </div>
                 </div>
 
                 <div className="panel" style={{ marginTop: '16px' }}>
@@ -138,12 +168,12 @@ function SuperAdminDashboard({ onLogout }) {
                     <table className="data-table">
                       <thead>
                         <tr>
-                          <th>Name</th>
-                          <th>Owner</th>
-                          <th>Subscription</th>
-                          <th>Expiry</th>
-                          <th>Users</th>
-                          <th>Medicines</th>
+                          <th>Pharmacy Name</th>
+                          <th>Pharmacy Code</th>
+                          <th>Owner Name</th>
+                          <th>Email</th>
+                          <th>Date Created</th>
+                          <th>Status</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -152,15 +182,15 @@ function SuperAdminDashboard({ onLogout }) {
                         ) : stats.recentPharmacies.map((p) => (
                           <tr key={p.id}>
                             <td><strong>{p.name}</strong></td>
+                            <td>{p.pharmacyCode || '-'}</td>
                             <td>{p.ownerName || '-'}</td>
+                            <td>{p.email || '-'}</td>
+                            <td>{new Date(p.createdAt).toLocaleDateString()}</td>
                             <td>
-                              <span className={`badge ${p.subscriptionStatus === 'ACTIVE' ? 'badge-active' : 'badge-inactive'}`}>
+                              <span className={`badge ${p.subscriptionStatus === 'ACTIVE' ? 'badge-active' : p.subscriptionStatus === 'TRIAL' ? 'badge-trial' : 'badge-inactive'}`}>
                                 {p.subscriptionStatus}
                               </span>
                             </td>
-                            <td>{p.subscriptionExpiryDate ? new Date(p.subscriptionExpiryDate).toLocaleDateString() : '-'}</td>
-                            <td>{p._count.users}</td>
-                            <td>{p._count.medicines}</td>
                           </tr>
                         ))}
                       </tbody>

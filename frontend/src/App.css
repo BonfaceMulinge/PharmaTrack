@@ -484,6 +484,91 @@ body {
   color: #f8fafc;
 }
 
+.subscription-card {
+  grid-column: span 1;
+}
+
+.sub-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.sub-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.85rem;
+}
+
+.sub-label {
+  color: #8ca0bb;
+}
+
+.sub-value {
+  color: #f8fafc;
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+.quick-actions {
+  margin-top: 16px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.quick-actions-label {
+  color: #8ca0bb;
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.quick-actions-buttons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.quick-actions-buttons .primary-btn {
+  font-size: 0.82rem;
+  padding: 8px 14px;
+}
+
+.quick-actions-buttons .ghost-btn {
+  font-size: 0.82rem;
+  padding: 8px 14px;
+}
+
+@media (max-width: 640px) {
+  .subscription-card {
+    grid-column: 1;
+  }
+
+  .quick-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .quick-actions-buttons {
+    flex-direction: column;
+  }
+
+  .quick-actions-buttons .primary-btn,
+  .quick-actions-buttons .ghost-btn {
+    width: 100%;
+    text-align: center;
+  }
+}
+
 /* ===== HOME GRID ===== */
 .home-grid {
   display: grid;
