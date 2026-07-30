@@ -1,6 +1,6 @@
 import { useState, useEffect, memo } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { initNotifications } from '../utils/notificationStore';
+import { initNotifications, onBadgeChange } from '../utils/notificationStore';
 import { STATIC_URL } from '../api';
 import InstallButton from './InstallButton';
 
@@ -24,9 +24,14 @@ export function PageLoader() {
 
 function Layout({ user, onLogout }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     initNotifications();
+  }, []);
+
+  useEffect(() => {
+    return onBadgeChange(setUnreadCount);
   }, []);
 
   const logoUrl = user?.pharmacyLogo ? `${STATIC_URL}${user.pharmacyLogo}` : null;
@@ -63,6 +68,9 @@ function Layout({ user, onLogout }) {
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d={item.icon}/></svg>
               {item.label}
+              {item.label === 'Notifications' && unreadCount > 0 && (
+                <span className="nav-notif-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>
+              )}
             </NavLink>
           ))}
           <InstallButton />
